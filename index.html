@@ -2,696 +2,637 @@
 <html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
-    <title>RassterAuth</title>
+    <title>RassterAuth Panel</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      body {
+      * {
         box-sizing: border-box;
       }
     </style>
   </head>
   <body class="h-full bg-slate-900 text-slate-100">
-    <div id="app" class="w-full h-full overflow-auto"></div>
+    <div id="app" class="min-h-screen"></div>
 
     <script>
-      // =========================
+      // ==========================
       // CONFIG
-      // =========================
-      const API_BASE = "YOUR_APPS_SCRIPT_URL_HERE"; // <-- your Apps Script URL
+      // ==========================
+      const API_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"; // <-- put your /exec URL here
 
-      // =========================
-      // SIMPLE STATE
-      // =========================
-      let view = "welcome"; // 'welcome' | 'auth' | 'admin' | 'reseller'
-      let authMode = "login"; // 'login' | 'register'
-      let currentUser = null;
-      let usersCache = []; // used in admin dashboard
+      const COMPANY_NAME = "RassterAuth";
 
-      // =========================
-      // RENDERING
-      // =========================
-      function render() {
-        const app = document.getElementById("app");
-        if (view === "welcome") {
-          app.innerHTML = renderWelcome();
-        } else if (view === "auth") {
-          app.innerHTML = renderAuth();
-        } else if (view === "admin") {
-          app.innerHTML = renderAdmin();
-        } else if (view === "reseller") {
-          app.innerHTML = renderReseller();
+      const state = {
+        view: "welcome", // welcome | login | register | admin | reseller
+        currentUser: null,
+        users: [],
+      };
+
+      // ==========================
+      // API HELPERS
+      // ==========================
+      async function apiRequest(action, payload = {}) {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            action,
+            ...payload,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Network error");
         }
-        attachEvents();
+        return res.json();
       }
+
+      async function apiRegister(email, username, password) {
+        return apiRequest("register", { email, username, password });
+      }
+
+      async function apiLogin(username, password) {
+        return apiRequest("login", { username, password });
+      }
+
+      async function apiGetUsers() {
+        return apiRequest("getUsers", {});
+      }
+
+      async function apiApproveUser(userId) {
+        return apiRequest("approveUser", { id: userId });
+      }
+
+      // ==========================
+      // VIEW RENDERERS
+      // ==========================
 
       function renderWelcome() {
         return `
-        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-          <div class="max-w-2xl w-full px-6 py-10 bg-slate-900/70 backdrop-blur-lg rounded-3xl shadow-2xl border border-slate-700">
-            <div class="flex flex-col items-center gap-4">
-              <div class="inline-flex items-center gap-3 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 text-xs font-medium">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                Secure Licensing Panel
-              </div>
-              <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-center">
-                Rasster<span class="text-emerald-400">Auth</span>
-              </h1>
-              <p class="text-slate-300 text-center max-w-xl">
-                Centralized license and client management for your products.
-                Admin approves resellers, resellers manage their own clients and keys.
-              </p>
-              <div class="mt-6 flex flex-col sm:flex-row gap-3">
-                <button id="enterBtn"
-                  class="px-8 py-3 rounded-full text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-900 shadow-lg shadow-emerald-500/30 transition">
-                  Enter Panel
-                </button>
-                <button id="learnBtn"
-                  class="px-6 py-3 rounded-full text-sm font-semibold border border-slate-600 hover:border-slate-400 text-slate-200">
-                  Learn More
-                </button>
-              </div>
-              <div class="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-slate-300 w-full">
-                <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700">
-                  <p class="font-semibold mb-1">Admin Approval</p>
-                  <p>New resellers must be approved before accessing the panel.</p>
+        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900">
+          <div class="max-w-4xl w-full px-6 py-12">
+            <div class="bg-slate-900/60 border border-slate-700 rounded-3xl shadow-2xl backdrop-blur">
+              <div class="grid md:grid-cols-2 gap-8 p-8">
+                <!-- Left: Branding -->
+                <div class="flex flex-col justify-between">
+                  <div>
+                    <div class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 text-xs font-semibold mb-4">
+                      Secure License Panel
+                    </div>
+                    <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">
+                      <span class="text-emerald-400">Rasster</span><span class="text-slate-100">Auth</span>
+                    </h1>
+                    <p class="text-slate-400 text-sm md:text-base max-w-md">
+                      Centralized panel for managing license keys, resellers, and secure product access.
+                      Email-verified users, admin approvals, and professional dashboard — all in one place.
+                    </p>
+                  </div>
+                  <div class="mt-6 hidden md:block">
+                    <div class="flex items-center gap-3 text-xs text-slate-500">
+                      <div class="flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        Email verification
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                        Admin approval
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-violet-400"></span>
+                        Reseller dashboard
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700">
-                  <p class="font-semibold mb-1">Email Verification</p>
-                  <p>Gmail verification with secure Brevo API integration.</p>
-                </div>
-                <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700">
-                  <p class="font-semibold mb-1">Google Sheets</p>
-                  <p>All users are stored in your RassterAuth Google Sheet.</p>
+
+                <!-- Right: CTAs -->
+                <div class="flex flex-col justify-center">
+                  <div class="bg-slate-900/80 border border-slate-700 rounded-2xl p-6 shadow-xl">
+                    <p class="text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">
+                      Start here
+                    </p>
+                    <h2 class="text-xl font-bold text-slate-100 mb-4">
+                      Welcome to ${COMPANY_NAME}
+                    </h2>
+
+                    <div class="space-y-3">
+                      <button id="btnGoLogin"
+                        class="w-full py-3 rounded-xl font-semibold text-slate-900 bg-emerald-400 hover:bg-emerald-300 transition">
+                        Login to Panel
+                      </button>
+                      <button id="btnGoRegister"
+                        class="w-full py-2.5 rounded-xl font-medium border border-slate-600 text-slate-200 hover:bg-slate-800 transition">
+                        Create Reseller Account
+                      </button>
+                    </div>
+
+                    <div class="mt-4 text-[11px] text-slate-500 leading-relaxed">
+                      Admin default login:
+                      <span class="font-mono bg-slate-800 px-1.5 py-0.5 rounded">Admin / Admin</span>
+                      (change later in back-end for security).
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      `;
+        </div>`;
       }
 
-      function renderAuth() {
-        const isLogin = authMode === "login";
-
+      function renderLogin() {
         return `
         <div class="min-h-screen flex items-center justify-center bg-slate-900">
-          <div class="w-full max-w-4xl mx-4 grid md:grid-cols-2 gap-6">
-            <!-- Left side branding -->
-            <div class="hidden md:flex flex-col justify-between rounded-3xl p-8 bg-gradient-to-br from-emerald-500 via-emerald-400 to-sky-500 shadow-2xl">
-              <div>
-                <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">
-                  RassterAuth
-                </h1>
-                <p class="mt-2 text-sm text-slate-900/80">
-                  Central panel for Admin and Resellers.
-                </p>
-              </div>
-              <div class="mt-6 space-y-3 text-sm text-slate-900">
-                <p>➤ Admin Login: <b>Admin / Admin</b></p>
-                <p>➤ New resellers must verify Gmail and then wait for admin approval.</p>
-                <p>➤ After approval, they can log in and access the Rasster reseller panel.</p>
-              </div>
-              <div class="mt-6 text-xs text-slate-900/80">
-                Connected to Google Sheets:
-                <span class="font-mono break-all">1KBtZvvgRuW5n3fDfavOy-GepsX1HLR2PFzjFwDmwYO0</span>
-              </div>
+          <div class="max-w-md w-full mx-4">
+            <div class="mb-6 text-center">
+              <h1 class="text-3xl font-extrabold">
+                <span class="text-emerald-400">Rasster</span><span class="text-slate-100">Auth</span>
+              </h1>
+              <p class="text-slate-400 text-sm mt-1">Sign in to your account</p>
             </div>
 
-            <!-- Right side auth card -->
-            <div class="bg-slate-900/80 border border-slate-700 rounded-3xl p-8 shadow-xl">
-              <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-bold text-slate-100">
-                  ${isLogin ? "Sign in to RassterAuth" : "Create RassterAuth Account"}
-                </h2>
-                <button id="backToWelcomeBtn" class="text-xs text-slate-400 hover:text-slate-200">
-                  ← Back
+            <div class="bg-slate-900/70 border border-slate-700 rounded-2xl p-6 shadow-xl">
+              <form id="loginForm" class="space-y-4">
+                <div>
+                  <label class="block text-sm text-slate-300 mb-1">Username</label>
+                  <input id="loginUsername" type="text" required
+                    class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                </div>
+                <div>
+                  <label class="block text-sm text-slate-300 mb-1">Password</label>
+                  <input id="loginPassword" type="password" required
+                    class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                </div>
+                <div id="loginError" class="text-xs text-red-400 min-h-[1.2rem]"></div>
+                <button id="loginBtn" type="submit"
+                  class="w-full py-2.5 rounded-lg bg-emerald-400 text-slate-900 font-semibold text-sm hover:bg-emerald-300 transition">
+                  Sign In
                 </button>
-              </div>
+              </form>
 
-              <div class="mb-4 flex text-sm bg-slate-800 rounded-full p-1">
-                <button id="tabLogin"
-                  class="flex-1 py-2 rounded-full ${
-                    isLogin ? "bg-slate-900 text-slate-100" : "text-slate-400"
-                  }">
-                  Login
-                </button>
-                <button id="tabRegister"
-                  class="flex-1 py-2 rounded-full ${
-                    !isLogin ? "bg-slate-900 text-slate-100" : "text-slate-400"
-                  }">
-                  Register
-                </button>
-              </div>
+              <button id="btnBackWelcome" class="mt-4 w-full text-xs text-slate-400 hover:text-slate-200">
+                ← Back to welcome
+              </button>
 
-              ${
-                isLogin
-                  ? renderLoginForm()
-                  : renderRegisterForm()
-              }
+              <p class="mt-3 text-xs text-center text-slate-400">
+                Don't have an account?
+                <button id="linkToRegister" class="text-emerald-400 hover:text-emerald-300 font-medium">
+                  Create account
+                </button>
+              </p>
             </div>
           </div>
-        </div>
-      `;
+        </div>`;
       }
 
-      function renderLoginForm() {
+      function renderRegister() {
         return `
-        <form id="loginForm" class="space-y-4">
-          <div>
-            <label class="block text-sm mb-1">Username</label>
-            <input id="loginUsername" type="text" required
-              class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+        <div class="min-h-screen flex items-center justify-center bg-slate-900">
+          <div class="max-w-md w-full mx-4">
+            <div class="mb-6 text-center">
+              <h1 class="text-3xl font-extrabold">
+                <span class="text-emerald-400">Rasster</span><span class="text-slate-100">Auth</span>
+              </h1>
+              <p class="text-slate-400 text-sm mt-1">Create reseller account</p>
+            </div>
+
+            <div class="bg-slate-900/70 border border-slate-700 rounded-2xl p-6 shadow-xl">
+              <form id="registerForm" class="space-y-4">
+                <div>
+                  <label class="block text-sm text-slate-300 mb-1">Email (Gmail)</label>
+                  <input id="registerEmail" type="email" required
+                    class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                </div>
+                <div>
+                  <label class="block text-sm text-slate-300 mb-1">Username</label>
+                  <input id="registerUsername" type="text" required
+                    class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                </div>
+                <div>
+                  <label class="block text-sm text-slate-300 mb-1">Password</label>
+                  <input id="registerPassword" type="password" required
+                    class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                </div>
+
+                <div id="registerError" class="text-xs text-red-400 min-h-[1.2rem]"></div>
+                <div id="registerSuccess" class="text-xs text-emerald-400 min-h-[1.2rem]"></div>
+
+                <button id="registerBtn" type="submit"
+                  class="w-full py-2.5 rounded-lg bg-emerald-400 text-slate-900 font-semibold text-sm hover:bg-emerald-300 transition">
+                  Register & Send Verification Email
+                </button>
+              </form>
+
+              <button id="btnBackWelcome2" class="mt-4 w-full text-xs text-slate-400 hover:text-slate-200">
+                ← Back to welcome
+              </button>
+
+              <p class="mt-3 text-xs text-center text-slate-400">
+                Already have an account?
+                <button id="linkToLogin" class="text-emerald-400 hover:text-emerald-300 font-medium">
+                  Sign in
+                </button>
+              </p>
+            </div>
           </div>
-          <div>
-            <label class="block text-sm mb-1">Password</label>
-            <input id="loginPassword" type="password" required
-              class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          </div>
-          <div id="loginError" class="hidden text-xs px-3 py-2 rounded bg-red-500/10 text-red-300"></div>
-          <button id="loginBtn" type="submit"
-            class="w-full py-2.5 rounded-lg text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-900">
-            Sign In
-          </button>
-        </form>
-      `;
+        </div>`;
       }
 
-      function renderRegisterForm() {
-        return `
-        <form id="registerForm" class="space-y-4">
-          <div>
-            <label class="block text-sm mb-1">Gmail Address</label>
-            <input id="registerEmail" type="email" required
-              class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              placeholder="yourname@gmail.com" />
-          </div>
-          <div>
-            <label class="block text-sm mb-1">Username</label>
-            <input id="registerUsername" type="text" required
-              class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          </div>
-          <div>
-            <label class="block text-sm mb-1">Password</label>
-            <input id="registerPassword" type="password" required
-              class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          </div>
-          <div id="registerError" class="hidden text-xs px-3 py-2 rounded bg-red-500/10 text-red-300"></div>
-          <div id="registerSuccess" class="hidden text-xs px-3 py-2 rounded bg-emerald-500/10 text-emerald-300"></div>
-          <button id="registerBtn" type="submit"
-            class="w-full py-2.5 rounded-lg text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-900">
-            Register & Verify Email
-          </button>
-        </form>
-      `;
-      }
-
-      function renderAdmin() {
-        const pending = usersCache.filter(
-          (u) => u.role === "reseller" && u.emailVerified && u.status !== "approved"
+      function renderAdminDashboard() {
+        const pendingUsers = state.users.filter(
+          (u) => u.role === "reseller" && u.emailVerified && !u.approved
         );
-        const allResellers = usersCache.filter((u) => u.role === "reseller");
+        const approvedUsers = state.users.filter(
+          (u) => u.role === "reseller" && u.emailVerified && u.approved
+        );
 
         return `
-        <div class="min-h-screen flex bg-slate-900 text-slate-100">
+        <div class="min-h-screen flex bg-slate-950 text-slate-100">
           <!-- Sidebar -->
-          <aside class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col">
+          <aside class="w-60 bg-slate-900 border-r border-slate-800 flex flex-col">
             <div class="px-4 py-4 border-b border-slate-800">
-              <div class="text-lg font-bold tracking-tight">
-                Rasster<span class="text-emerald-400">Auth</span>
+              <div class="text-lg font-bold">
+                <span class="text-emerald-400">Rasster</span>Admin
               </div>
-              <div class="text-xs text-slate-400 mt-1">Admin Panel</div>
+              <div class="text-[11px] text-slate-500 mt-1">
+                Admin control panel
+              </div>
             </div>
-            <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
-              <div class="px-3 py-2 rounded-lg bg-slate-800 text-emerald-300 font-medium flex items-center justify-between">
-                <span>Dashboard</span>
-                <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">ADMIN</span>
+            <nav class="flex-1 px-3 py-4 text-sm space-y-1">
+              <div class="px-3 py-2 rounded-xl bg-slate-800 text-emerald-300 font-semibold flex items-center justify-between">
+                <span>Pending users</span>
+                <span class="px-2 py-0.5 rounded-full bg-slate-900 text-[10px]">${pendingUsers.length}</span>
               </div>
-              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
-                Resellers
-              </div>
-              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
-                Settings
+              <div class="px-3 py-2 rounded-xl text-slate-300 flex items-center justify-between">
+                <span>Approved resellers</span>
+                <span class="text-[11px] bg-slate-800 px-2 py-0.5 rounded-full">${approvedUsers.length}</span>
               </div>
             </nav>
-            <div class="px-4 py-4 border-t border-slate-800 text-xs text-slate-400 flex justify-between items-center">
-              <span>Logged in as <b>Admin</b></span>
-              <button id="logoutBtn" class="text-red-400 hover:text-red-300">Logout</button>
+            <div class="p-3 border-t border-slate-800">
+              <button id="btnLogout" class="w-full text-xs py-2 rounded-lg bg-slate-800 hover:bg-slate-700">
+                Logout
+              </button>
             </div>
           </aside>
 
           <!-- Main -->
-          <main class="flex-1 p-6 space-y-6">
-            <div class="flex flex-wrap gap-4">
-              <div class="flex-1 min-w-[180px] p-4 rounded-2xl bg-slate-800 border border-slate-700">
-                <div class="text-xs text-slate-400">Pending approvals</div>
-                <div class="mt-1 text-2xl font-bold">${pending.length}</div>
+          <main class="flex-1 p-6 space-y-6 overflow-y-auto">
+            <header class="flex items-center justify-between">
+              <div>
+                <h1 class="text-2xl font-bold">Admin Dashboard</h1>
+                <p class="text-xs text-slate-400">Approve verified RassterAuth resellers</p>
               </div>
-              <div class="flex-1 min-w-[180px] p-4 rounded-2xl bg-slate-800 border border-slate-700">
-                <div class="text-xs text-slate-400">Total resellers</div>
-                <div class="mt-1 text-2xl font-bold">${allResellers.length}</div>
-              </div>
-            </div>
+            </header>
 
-            <section class="bg-slate-900/80 border border-slate-700 rounded-2xl p-5">
-              <div class="flex justify-between items-center mb-3">
-                <h2 class="text-lg font-semibold">Pending verified resellers</h2>
-                <button id="refreshUsersBtn"
-                  class="text-xs px-3 py-1 rounded-full border border-slate-600 hover:border-emerald-400">
-                  Refresh
-                </button>
+            <section class="grid md:grid-cols-2 gap-6">
+              <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h2 class="text-sm font-semibold">Pending approvals</h2>
+                  <span class="text-[11px] text-slate-400">Verified email, waiting admin</span>
+                </div>
+                ${
+                  pendingUsers.length === 0
+                    ? `<p class="text-xs text-slate-500">No pending users.</p>`
+                    : `<div class="space-y-2">
+                    ${pendingUsers
+                      .map(
+                        (u) => `
+                      <div class="flex items-center justify-between border border-slate-800 rounded-xl px-3 py-2 text-xs">
+                        <div>
+                          <div class="font-semibold">${u.username}</div>
+                          <div class="text-slate-400">${u.email}</div>
+                          <div class="text-[10px] text-emerald-400">Email verified</div>
+                        </div>
+                        <button class="btnApprove text-[11px] px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-900 font-semibold" data-id="${u.id}">
+                          Approve
+                        </button>
+                      </div>`
+                      )
+                      .join("")}
+                  </div>`
+                }
               </div>
-              ${
-                pending.length === 0
-                  ? `<p class="text-sm text-slate-400">No verified users waiting for approval.</p>`
-                  : `
-                <div class="overflow-x-auto text-sm">
-                  <table class="min-w-full border border-slate-700 rounded-lg overflow-hidden">
-                    <thead class="bg-slate-800 text-slate-300">
-                      <tr>
-                        <th class="px-3 py-2 text-left">Username</th>
-                        <th class="px-3 py-2 text-left">Email</th>
-                        <th class="px-3 py-2 text-left">Status</th>
-                        <th class="px-3 py-2 text-left">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800">
-                      ${pending
-                        .map(
-                          (u) => `
-                        <tr>
-                          <td class="px-3 py-2">${u.username}</td>
-                          <td class="px-3 py-2">${u.email}</td>
-                          <td class="px-3 py-2">
-                            <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-300">
-                              ${u.status}
-                            </span>
-                          </td>
-                          <td class="px-3 py-2">
-                            <button class="approveBtn text-xs px-3 py-1 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-900"
-                              data-user-id="${u.id}">
-                              Approve
-                            </button>
-                          </td>
-                        </tr>
-                      `
-                        )
-                        .join("")}
-                    </tbody>
-                  </table>
-                </div>
-              `
-              }
-            </section>
 
-            <section class="bg-slate-900/80 border border-slate-700 rounded-2xl p-5">
-              <h2 class="text-lg font-semibold mb-3">All resellers</h2>
-              ${
-                allResellers.length === 0
-                  ? `<p class="text-sm text-slate-400">No resellers yet.</p>`
-                  : `
-                <div class="overflow-x-auto text-sm">
-                  <table class="min-w-full border border-slate-700 rounded-lg overflow-hidden">
-                    <thead class="bg-slate-800 text-slate-300">
-                      <tr>
-                        <th class="px-3 py-2 text-left">Username</th>
-                        <th class="px-3 py-2 text-left">Email</th>
-                        <th class="px-3 py-2 text-left">Email Verified</th>
-                        <th class="px-3 py-2 text-left">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800">
-                      ${allResellers
-                        .map(
-                          (u) => `
-                        <tr>
-                          <td class="px-3 py-2">${u.username}</td>
-                          <td class="px-3 py-2">${u.email}</td>
-                          <td class="px-3 py-2">
-                            ${
-                              u.emailVerified
-                                ? '<span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300">Yes</span>'
-                                : '<span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-300">No</span>'
-                            }
-                          </td>
-                          <td class="px-3 py-2 text-xs">
-                            ${
-                              u.status === "approved"
-                                ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300">approved</span>'
-                                : `<span class="px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-300">${u.status}</span>`
-                            }
-                          </td>
-                        </tr>
-                      `
-                        )
-                        .join("")}
-                    </tbody>
-                  </table>
+              <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h2 class="text-sm font-semibold">Approved resellers</h2>
+                  <span class="text-[11px] text-slate-400">Can login to RassterAuth</span>
                 </div>
-              `
-              }
+                ${
+                  approvedUsers.length === 0
+                    ? `<p class="text-xs text-slate-500">No approved resellers yet.</p>`
+                    : `<div class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    ${approvedUsers
+                      .map(
+                        (u) => `
+                      <div class="flex items-center justify-between border border-slate-800 rounded-xl px-3 py-2 text-xs">
+                        <div>
+                          <div class="font-semibold">${u.username}</div>
+                          <div class="text-slate-400">${u.email}</div>
+                        </div>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-600/40">
+                          reseller
+                        </span>
+                      </div>`
+                      )
+                      .join("")}
+                  </div>`
+                }
+              </div>
             </section>
           </main>
-        </div>
-      `;
+        </div>`;
       }
 
-      function renderReseller() {
+      function renderResellerDashboard() {
+        const u = state.currentUser;
         return `
-        <div class="min-h-screen flex bg-slate-900 text-slate-100">
+        <div class="min-h-screen flex bg-slate-950 text-slate-100">
           <!-- Sidebar -->
-          <aside class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col">
+          <aside class="w-60 bg-slate-900 border-r border-slate-800 flex flex-col">
             <div class="px-4 py-4 border-b border-slate-800">
-              <div class="text-lg font-bold tracking-tight">
-                <span class="text-emerald-400">RASTER</span>
+              <div class="text-lg font-bold">
+                <span class="text-emerald-400">RASTER</span><span class="text-slate-100"> Panel</span>
               </div>
-              <div class="text-xs text-slate-400 mt-1">Reseller Panel</div>
+              <div class="text-[11px] text-slate-500 mt-1">
+                Reseller dashboard
+              </div>
             </div>
-            <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
-              <div class="px-3 py-2 rounded-lg bg-slate-800 text-emerald-300 font-medium">
-                Dashboard
+            <nav class="flex-1 px-3 py-4 text-sm space-y-1">
+              <div class="px-3 py-2 rounded-xl bg-slate-800 text-emerald-300 font-semibold">
+                Overview
               </div>
-              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
+              <div class="px-3 py-2 rounded-xl text-slate-300">
                 Licenses
               </div>
-              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
-                Clients
+              <div class="px-3 py-2 rounded-xl text-slate-300">
+                Orders
               </div>
-              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
-                Payments
-              </div>
-              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
+              <div class="px-3 py-2 rounded-xl text-slate-300">
                 Settings
               </div>
             </nav>
-            <div class="px-4 py-4 border-t border-slate-800 text-xs text-slate-400 flex justify-between items-center">
-              <span>${currentUser?.username}</span>
-              <button id="logoutBtn" class="text-red-400 hover:text-red-300">Logout</button>
+            <div class="p-3 border-t border-slate-800">
+              <button id="btnLogout" class="w-full text-xs py-2 rounded-lg bg-slate-800 hover:bg-slate-700">
+                Logout
+              </button>
             </div>
           </aside>
 
           <!-- Main -->
-          <main class="flex-1 p-6 space-y-6">
-            <div class="flex flex-wrap gap-4">
-              <div class="flex-1 min-w-[180px] p-4 rounded-2xl bg-slate-800 border border-slate-700">
-                <div class="text-xs text-slate-400">Welcome</div>
-                <div class="mt-1 text-xl font-bold">Hello, ${
-                  currentUser?.username
-                }</div>
-                <div class="mt-1 text-xs text-slate-400">
-                  Your account is active as <b>reseller</b>.
-                </div>
+          <main class="flex-1 p-6 space-y-6 overflow-y-auto">
+            <header class="flex items-center justify-between">
+              <div>
+                <h1 class="text-2xl font-bold">Welcome, ${u.username}</h1>
+                <p class="text-xs text-slate-400">
+                  Reseller access is active. Manage your keys and account here.
+                </p>
               </div>
-              <div class="flex-1 min-w-[180px] p-4 rounded-2xl bg-slate-800 border border-slate-700">
-                <div class="text-xs text-slate-400">Status</div>
-                <div class="mt-1 text-xl font-bold text-emerald-400">Approved</div>
-                <div class="mt-1 text-xs text-slate-400">
-                  You can now manage your clients and licenses.
-                </div>
-              </div>
-            </div>
+            </header>
 
-            <section class="bg-slate-900/80 border border-slate-700 rounded-2xl p-5">
-              <h2 class="text-lg font-semibold mb-2">Quick Stats</h2>
-              <p class="text-sm text-slate-400 mb-3">
-                (Demo only) This is placeholder content – you can add real license and client statistics here.
-              </p>
-              <div class="grid sm:grid-cols-3 gap-4 text-sm">
-                <div class="p-3 rounded-xl bg-slate-800 border border-slate-700">
-                  <div class="text-xs text-slate-400">Total licenses</div>
-                  <div class="text-xl font-bold mt-1">0</div>
-                </div>
-                <div class="p-3 rounded-xl bg-slate-800 border border-slate-700">
-                  <div class="text-xs text-slate-400">Active clients</div>
-                  <div class="text-xl font-bold mt-1">0</div>
-                </div>
-                <div class="p-3 rounded-xl bg-slate-800 border border-slate-700">
-                  <div class="text-xs text-slate-400">Expiring soon</div>
-                  <div class="text-xl font-bold mt-1">0</div>
-                </div>
+            <section class="grid md:grid-cols-3 gap-4">
+              <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+                <p class="text-[11px] text-slate-400 mb-1 uppercase">Account</p>
+                <p class="text-sm font-semibold">Email</p>
+                <p class="text-xs text-slate-400 break-all">${u.email}</p>
+              </div>
+              <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+                <p class="text-[11px] text-slate-400 mb-1 uppercase">Role</p>
+                <p class="text-sm font-semibold">Reseller</p>
+              </div>
+              <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+                <p class="text-[11px] text-slate-400 mb-1 uppercase">Status</p>
+                <p class="text-sm font-semibold text-emerald-400">Approved & Email Verified</p>
               </div>
             </section>
+
+            <section class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+              <h2 class="text-sm font-semibold mb-2">Dashboard area</h2>
+              <p class="text-xs text-slate-400">
+                Here you can later integrate license generation, key list, HWID binding,
+                and other RassterAuth specific modules – design this area freely as you grow.
+              </p>
+            </section>
           </main>
-        </div>
-      `;
+        </div>`;
       }
 
-      // =========================
-      // EVENT HANDLERS
-      // =========================
+      // ==========================
+      // MAIN RENDER
+      // ==========================
+
+      function renderApp() {
+        const app = document.getElementById("app");
+        let html = "";
+        if (state.view === "welcome") html = renderWelcome();
+        else if (state.view === "login") html = renderLogin();
+        else if (state.view === "register") html = renderRegister();
+        else if (state.view === "admin") html = renderAdminDashboard();
+        else if (state.view === "reseller") html = renderResellerDashboard();
+        app.innerHTML = html;
+        attachEvents();
+      }
+
+      // ==========================
+      // EVENTS
+      // ==========================
+
       function attachEvents() {
-        const enterBtn = document.getElementById("enterBtn");
-        if (enterBtn) {
-          enterBtn.addEventListener("click", () => {
-            view = "auth";
-            authMode = "login";
-            render();
+        // Welcome buttons
+        const btnGoLogin = document.getElementById("btnGoLogin");
+        if (btnGoLogin) {
+          btnGoLogin.addEventListener("click", () => {
+            state.view = "login";
+            renderApp();
+          });
+        }
+        const btnGoRegister = document.getElementById("btnGoRegister");
+        if (btnGoRegister) {
+          btnGoRegister.addEventListener("click", () => {
+            state.view = "register";
+            renderApp();
           });
         }
 
-        const learnBtn = document.getElementById("learnBtn");
-        if (learnBtn) {
-          learnBtn.addEventListener("click", () => {
-            alert(
-              "RassterAuth: Admin approves resellers, email verification via Brevo, users stored in Google Sheets."
-            );
+        // Back buttons
+        const btnBackWelcome = document.getElementById("btnBackWelcome");
+        if (btnBackWelcome) {
+          btnBackWelcome.addEventListener("click", () => {
+            state.view = "welcome";
+            renderApp();
+          });
+        }
+        const btnBackWelcome2 = document.getElementById("btnBackWelcome2");
+        if (btnBackWelcome2) {
+          btnBackWelcome2.addEventListener("click", () => {
+            state.view = "welcome";
+            renderApp();
           });
         }
 
-        const backToWelcomeBtn = document.getElementById("backToWelcomeBtn");
-        if (backToWelcomeBtn) {
-          backToWelcomeBtn.addEventListener("click", () => {
-            view = "welcome";
-            render();
+        // Links between login/register
+        const linkToRegister = document.getElementById("linkToRegister");
+        if (linkToRegister) {
+          linkToRegister.addEventListener("click", () => {
+            state.view = "register";
+            renderApp();
+          });
+        }
+        const linkToLogin = document.getElementById("linkToLogin");
+        if (linkToLogin) {
+          linkToLogin.addEventListener("click", () => {
+            state.view = "login";
+            renderApp();
           });
         }
 
-        const tabLogin = document.getElementById("tabLogin");
-        if (tabLogin) {
-          tabLogin.addEventListener("click", () => {
-            authMode = "login";
-            render();
-          });
-        }
-
-        const tabRegister = document.getElementById("tabRegister");
-        if (tabRegister) {
-          tabRegister.addEventListener("click", () => {
-            authMode = "register";
-            render();
-          });
-        }
-
+        // Login form
         const loginForm = document.getElementById("loginForm");
         if (loginForm) {
-          loginForm.addEventListener("submit", handleLogin);
+          loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const username = document.getElementById("loginUsername").value.trim();
+            const password = document.getElementById("loginPassword").value;
+            const errDiv = document.getElementById("loginError");
+            const btn = document.getElementById("loginBtn");
+            errDiv.textContent = "";
+
+            // Hard-coded admin
+            if (username === "Admin" && password === "Admin") {
+              state.currentUser = { username: "Admin", role: "admin" };
+              // Load users for admin panel
+              try {
+                btn.disabled = true;
+                btn.textContent = "Signing in...";
+                const res = await apiGetUsers();
+                if (res.success) {
+                  state.users = res.users;
+                }
+                state.view = "admin";
+                renderApp();
+              } catch (err) {
+                errDiv.textContent = "Error loading users.";
+              }
+              return;
+            }
+
+            try {
+              btn.disabled = true;
+              btn.textContent = "Signing in...";
+              const res = await apiLogin(username, password);
+              if (!res.success) {
+                errDiv.textContent = res.message || "Login failed.";
+              } else {
+                const u = res.user;
+                if (u.role === "reseller") {
+                  if (!u.emailVerified) {
+                    errDiv.textContent = "Please verify your email first.";
+                  } else if (!u.approved) {
+                    errDiv.textContent = "Your account is pending admin approval.";
+                  } else {
+                    state.currentUser = u;
+                    state.view = "reseller";
+                    renderApp();
+                    return;
+                  }
+                } else {
+                  errDiv.textContent = "Unknown role.";
+                }
+              }
+            } catch (err) {
+              errDiv.textContent = "Network error.";
+            } finally {
+              const btn2 = document.getElementById("loginBtn");
+              if (btn2) {
+                btn2.disabled = false;
+                btn2.textContent = "Sign In";
+              }
+            }
+          });
         }
 
+        // Register form
         const registerForm = document.getElementById("registerForm");
         if (registerForm) {
-          registerForm.addEventListener("submit", handleRegister);
-        }
+          registerForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("registerEmail").value.trim();
+            const username = document.getElementById("registerUsername").value.trim();
+            const password = document.getElementById("registerPassword").value;
+            const errDiv = document.getElementById("registerError");
+            const okDiv = document.getElementById("registerSuccess");
+            const btn = document.getElementById("registerBtn");
+            errDiv.textContent = "";
+            okDiv.textContent = "";
 
-        const logoutBtn = document.getElementById("logoutBtn");
-        if (logoutBtn) {
-          logoutBtn.addEventListener("click", () => {
-            currentUser = null;
-            view = "auth";
-            authMode = "login";
-            render();
+            if (!email.toLowerCase().endsWith("@gmail.com")) {
+              errDiv.textContent = "Only Gmail addresses are allowed.";
+              return;
+            }
+
+            try {
+              btn.disabled = true;
+              btn.textContent = "Registering...";
+              const res = await apiRegister(email, username, password);
+              if (!res.success) {
+                errDiv.textContent = res.message || "Registration failed.";
+              } else {
+                okDiv.textContent =
+                  "Verification email sent. Please check your inbox and confirm your email.";
+                registerForm.reset();
+              }
+            } catch (err) {
+              errDiv.textContent = "Network error.";
+            } finally {
+              const btn2 = document.getElementById("registerBtn");
+              if (btn2) {
+                btn2.disabled = false;
+                btn2.textContent = "Register & Send Verification Email";
+              }
+            }
           });
         }
 
-        const refreshUsersBtn = document.getElementById("refreshUsersBtn");
-        if (refreshUsersBtn) {
-          refreshUsersBtn.addEventListener("click", () => {
-            loadUsersForAdmin();
+        // Logout
+        const btnLogout = document.getElementById("btnLogout");
+        if (btnLogout) {
+          btnLogout.addEventListener("click", () => {
+            state.currentUser = null;
+            state.view = "welcome";
+            renderApp();
           });
         }
 
-        const approveBtns = document.querySelectorAll(".approveBtn");
-        approveBtns.forEach((btn) => {
-          btn.addEventListener("click", () => {
-            const userId = btn.getAttribute("data-user-id");
-            approveUser(userId);
+        // Approve buttons
+        document.querySelectorAll(".btnApprove").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const id = btn.dataset.id;
+            btn.disabled = true;
+            btn.textContent = "Approving...";
+            try {
+              const res = await apiApproveUser(id);
+              if (res.success) {
+                const list = await apiGetUsers();
+                if (list.success) {
+                  state.users = list.users;
+                  renderApp();
+                }
+              } else {
+                alert(res.message || "Failed to approve.");
+                btn.disabled = false;
+              }
+            } catch (err) {
+              alert("Network error.");
+              btn.disabled = false;
+            }
           });
         });
       }
 
-      async function handleLogin(e) {
-        e.preventDefault();
-        const username = document.getElementById("loginUsername").value.trim();
-        const password = document.getElementById("loginPassword").value;
-        const errorDiv = document.getElementById("loginError");
-        const loginBtn = document.getElementById("loginBtn");
-
-        errorDiv.classList.add("hidden");
-        errorDiv.textContent = "";
-
-        // Admin login (front-end only)
-        if (username === "Admin" && password === "Admin") {
-          currentUser = { username: "Admin", role: "admin" };
-          view = "admin";
-          await loadUsersForAdmin();
-          return;
-        }
-
-        loginBtn.disabled = true;
-        loginBtn.textContent = "Signing in...";
-
-        try {
-          const res = await fetch(API_BASE, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              mode: "login",
-              username,
-              password,
-            }),
-          });
-          const data = await res.json();
-
-          if (!data.ok) {
-            errorDiv.textContent = data.error || "Login failed";
-            errorDiv.classList.remove("hidden");
-            loginBtn.disabled = false;
-            loginBtn.textContent = "Sign In";
-            return;
-          }
-
-          const user = data.user;
-
-          if (!user.emailVerified) {
-            errorDiv.textContent =
-              "Please verify your email first (check your Gmail inbox).";
-            errorDiv.classList.remove("hidden");
-            loginBtn.disabled = false;
-            loginBtn.textContent = "Sign In";
-            return;
-          }
-
-          if (user.status !== "approved") {
-            errorDiv.textContent =
-              "Your account is waiting for admin approval.";
-            errorDiv.classList.remove("hidden");
-            loginBtn.disabled = false;
-            loginBtn.textContent = "Sign In";
-            return;
-          }
-
-          currentUser = user;
-          view = "reseller";
-          render();
-        } catch (err) {
-          console.error(err);
-          errorDiv.textContent = "Network error. Please try again.";
-          errorDiv.classList.remove("hidden");
-        } finally {
-          loginBtn.disabled = false;
-          loginBtn.textContent = "Sign In";
-        }
-      }
-
-      async function handleRegister(e) {
-        e.preventDefault();
-        const email = document.getElementById("registerEmail").value.trim();
-        const username = document
-          .getElementById("registerUsername")
-          .value.trim();
-        const password = document.getElementById("registerPassword").value;
-        const errorDiv = document.getElementById("registerError");
-        const successDiv = document.getElementById("registerSuccess");
-        const registerBtn = document.getElementById("registerBtn");
-
-        errorDiv.classList.add("hidden");
-        successDiv.classList.add("hidden");
-        errorDiv.textContent = "";
-        successDiv.textContent = "";
-
-        if (!email.toLowerCase().endsWith("@gmail.com")) {
-          errorDiv.textContent = "Only Gmail addresses are allowed.";
-          errorDiv.classList.remove("hidden");
-          return;
-        }
-
-        registerBtn.disabled = true;
-        registerBtn.textContent = "Registering...";
-
-        try {
-          const res = await fetch(API_BASE, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              mode: "register",
-              email,
-              username,
-              password,
-            }),
-          });
-          const data = await res.json();
-
-          if (!data.ok) {
-            errorDiv.textContent = data.error || "Registration failed.";
-            errorDiv.classList.remove("hidden");
-          } else {
-            successDiv.textContent =
-              "Registered successfully! Check your Gmail inbox and click the verification link.";
-            successDiv.classList.remove("hidden");
-            (document.getElementById("registerForm") || {}).reset?.();
-          }
-        } catch (err) {
-          console.error(err);
-          errorDiv.textContent = "Network error. Please try again.";
-          errorDiv.classList.remove("hidden");
-        } finally {
-          registerBtn.disabled = false;
-          registerBtn.textContent = "Register & Verify Email";
-        }
-      }
-
-      async function loadUsersForAdmin() {
-        try {
-          const res = await fetch(API_BASE + "?mode=listUsers");
-          const data = await res.json();
-          if (data.ok) {
-            usersCache = data.users || [];
-            render();
-          } else {
-            alert("Failed to load users.");
-          }
-        } catch (err) {
-          console.error(err);
-          alert("Network error while loading users.");
-        }
-      }
-
-      async function approveUser(userId) {
-        if (!confirm("Approve this reseller?")) return;
-        try {
-          const res = await fetch(API_BASE, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              mode: "approve",
-              userId,
-            }),
-          });
-          const data = await res.json();
-          if (data.ok) {
-            await loadUsersForAdmin();
-          } else {
-            alert(data.error || "Approval failed.");
-          }
-        } catch (err) {
-          console.error(err);
-          alert("Network error while approving user.");
-        }
-      }
-
-      // =========================
-      // INIT
-      // =========================
-      render();
+      // Init
+      renderApp();
     </script>
   </body>
 </html>
