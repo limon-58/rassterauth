@@ -2,589 +2,486 @@
 <html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
+    <title>RassterAuth</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RassterAuth – User Management System</title>
-    <script src="/_sdk/data_sdk.js"></script>
-    <script src="/_sdk/element_sdk.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       body {
         box-sizing: border-box;
       }
     </style>
-    <style>
-      @view-transition {
-        navigation: auto;
-      }
-    </style>
   </head>
-  <body class="h-full">
+  <body class="h-full bg-slate-900 text-slate-100">
     <div id="app" class="w-full h-full overflow-auto"></div>
 
     <script>
-      const defaultConfig = {
-        site_title: "RassterAuth",
-        login_heading: "Welcome Back",
-        register_heading: "Create RassterAuth Account",
-        background_color: "#0b1120",
-        surface_color: "#020617",
-        text_color: "#e5e7eb",
-        primary_action_color: "#4f46e5",
-        secondary_action_color: "#6b7280",
-      };
+      // =========================
+      // CONFIG
+      // =========================
+      const API_BASE = "YOUR_APPS_SCRIPT_URL_HERE"; // <-- your Apps Script URL
 
-      let allUsers = [];
+      // =========================
+      // SIMPLE STATE
+      // =========================
+      let view = "welcome"; // 'welcome' | 'auth' | 'admin' | 'reseller'
+      let authMode = "login"; // 'login' | 'register'
       let currentUser = null;
-      // start with landing page
-      let currentView = "landing";
+      let usersCache = []; // used in admin dashboard
 
-      // Ensure built-in admin exists (Admin / Admin)
-      async function ensureAdminUser() {
-        const admin = allUsers.find((u) => u.username === "Admin");
-        if (admin) return;
-
-        const adminUser = {
-          id: "rassterauth-admin",
-          email: "admin@rassterauth.local",
-          username: "Admin",
-          password: "Admin",
-          role: "admin",
-          status: "approved",
-          emailVerified: true,
-          createdAt: new Date().toISOString(),
-        };
-
-        await window.dataSdk.create(adminUser);
-      }
-
-      const dataHandler = {
-        async onDataChanged(data) {
-          allUsers = data || [];
-          // make sure we always have the admin
-          if (window.dataSdk) {
-            await ensureAdminUser();
-          }
-          renderApp();
-        },
-      };
-
-      async function initApp() {
-        const initResult = await window.dataSdk.init(dataHandler);
-        if (!initResult.isOk) {
-          console.error("Failed to initialize data SDK");
-          return;
-        }
-        renderApp();
-      }
-
-      function renderApp() {
-        const config = window.elementSdk?.config || defaultConfig;
+      // =========================
+      // RENDERING
+      // =========================
+      function render() {
         const app = document.getElementById("app");
-
-        if (!currentUser) {
-          if (currentView === "landing") {
-            app.innerHTML = renderLanding(config);
-          } else if (currentView === "login") {
-            app.innerHTML = renderLogin(config);
-          } else {
-            app.innerHTML = renderRegister(config);
-          }
-        } else {
-          if (currentUser.role === "admin") {
-            app.innerHTML = renderAdminDashboard(config);
-          } else {
-            app.innerHTML = renderUserDashboard(config);
-          }
+        if (view === "welcome") {
+          app.innerHTML = renderWelcome();
+        } else if (view === "auth") {
+          app.innerHTML = renderAuth();
+        } else if (view === "admin") {
+          app.innerHTML = renderAdmin();
+        } else if (view === "reseller") {
+          app.innerHTML = renderReseller();
         }
-
-        attachEventListeners(config);
+        attachEvents();
       }
 
-      // ========== VIEWS ==========
-
-      // Hero / welcome page like your screenshot
-      function renderLanding(config) {
+      function renderWelcome() {
         return `
-        <div class="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-          <!-- Top nav -->
-          <header class="w-full px-8 py-4 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <div class="h-8 w-8 rounded-full flex items-center justify-center bg-gradient-to-tr from-blue-500 to-emerald-400">
-                <span class="text-xs font-bold">RA</span>
+        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+          <div class="max-w-2xl w-full px-6 py-10 bg-slate-900/70 backdrop-blur-lg rounded-3xl shadow-2xl border border-slate-700">
+            <div class="flex flex-col items-center gap-4">
+              <div class="inline-flex items-center gap-3 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 text-xs font-medium">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                Secure Licensing Panel
               </div>
-              <span class="font-semibold text-lg">RassterAuth</span>
-            </div>
-            <nav class="flex items-center gap-4">
-              <button id="landingSignIn" class="text-sm hover:underline">
-                Sign in
-              </button>
-              <button
-                id="landingSignUp"
-                class="text-sm px-4 py-2 rounded-lg font-semibold text-white"
-                style="background-color: ${
-                  config.primary_action_color ||
-                  defaultConfig.primary_action_color
-                }"
-              >
-                Sign Up
-              </button>
-            </nav>
-          </header>
-
-          <!-- Hero -->
-          <main class="flex-1 flex items-center justify-center px-4 pb-16">
-            <div class="max-w-3xl text-center">
-              <h1 class="text-3xl md:text-5xl font-bold mb-6 leading-tight">
-                The better way to manage your<br/>
-                application with
-                <span class="text-emerald-400">RassterAuth</span>
+              <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-center">
+                Rasster<span class="text-emerald-400">Auth</span>
               </h1>
-              <p class="text-slate-400 mb-10 max-w-xl mx-auto">
-                Secure license management, reseller control and powerful admin approval 
-                workflows — all in one dashboard.
+              <p class="text-slate-300 text-center max-w-xl">
+                Centralized license and client management for your products.
+                Admin approves resellers, resellers manage their own clients and keys.
               </p>
-              <button
-                id="landingGetStarted"
-                class="px-8 py-3 rounded-lg font-semibold text-white text-sm md:text-base shadow-lg flex items-center gap-2 mx-auto"
-                style="background-color: ${
-                  config.primary_action_color ||
-                  defaultConfig.primary_action_color
-                }"
-              >
-                Get Started <span>➜</span>
-              </button>
+              <div class="mt-6 flex flex-col sm:flex-row gap-3">
+                <button id="enterBtn"
+                  class="px-8 py-3 rounded-full text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-900 shadow-lg shadow-emerald-500/30 transition">
+                  Enter Panel
+                </button>
+                <button id="learnBtn"
+                  class="px-6 py-3 rounded-full text-sm font-semibold border border-slate-600 hover:border-slate-400 text-slate-200">
+                  Learn More
+                </button>
+              </div>
+              <div class="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-slate-300 w-full">
+                <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700">
+                  <p class="font-semibold mb-1">Admin Approval</p>
+                  <p>New resellers must be approved before accessing the panel.</p>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700">
+                  <p class="font-semibold mb-1">Email Verification</p>
+                  <p>Gmail verification with secure Brevo API integration.</p>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700">
+                  <p class="font-semibold mb-1">Google Sheets</p>
+                  <p>All users are stored in your RassterAuth Google Sheet.</p>
+                </div>
+              </div>
             </div>
+          </div>
+        </div>
+      `;
+      }
+
+      function renderAuth() {
+        const isLogin = authMode === "login";
+
+        return `
+        <div class="min-h-screen flex items-center justify-center bg-slate-900">
+          <div class="w-full max-w-4xl mx-4 grid md:grid-cols-2 gap-6">
+            <!-- Left side branding -->
+            <div class="hidden md:flex flex-col justify-between rounded-3xl p-8 bg-gradient-to-br from-emerald-500 via-emerald-400 to-sky-500 shadow-2xl">
+              <div>
+                <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">
+                  RassterAuth
+                </h1>
+                <p class="mt-2 text-sm text-slate-900/80">
+                  Central panel for Admin and Resellers.
+                </p>
+              </div>
+              <div class="mt-6 space-y-3 text-sm text-slate-900">
+                <p>➤ Admin Login: <b>Admin / Admin</b></p>
+                <p>➤ New resellers must verify Gmail and then wait for admin approval.</p>
+                <p>➤ After approval, they can log in and access the Rasster reseller panel.</p>
+              </div>
+              <div class="mt-6 text-xs text-slate-900/80">
+                Connected to Google Sheets:
+                <span class="font-mono break-all">1KBtZvvgRuW5n3fDfavOy-GepsX1HLR2PFzjFwDmwYO0</span>
+              </div>
+            </div>
+
+            <!-- Right side auth card -->
+            <div class="bg-slate-900/80 border border-slate-700 rounded-3xl p-8 shadow-xl">
+              <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-slate-100">
+                  ${isLogin ? "Sign in to RassterAuth" : "Create RassterAuth Account"}
+                </h2>
+                <button id="backToWelcomeBtn" class="text-xs text-slate-400 hover:text-slate-200">
+                  ← Back
+                </button>
+              </div>
+
+              <div class="mb-4 flex text-sm bg-slate-800 rounded-full p-1">
+                <button id="tabLogin"
+                  class="flex-1 py-2 rounded-full ${
+                    isLogin ? "bg-slate-900 text-slate-100" : "text-slate-400"
+                  }">
+                  Login
+                </button>
+                <button id="tabRegister"
+                  class="flex-1 py-2 rounded-full ${
+                    !isLogin ? "bg-slate-900 text-slate-100" : "text-slate-400"
+                  }">
+                  Register
+                </button>
+              </div>
+
+              ${
+                isLogin
+                  ? renderLoginForm()
+                  : renderRegisterForm()
+              }
+            </div>
+          </div>
+        </div>
+      `;
+      }
+
+      function renderLoginForm() {
+        return `
+        <form id="loginForm" class="space-y-4">
+          <div>
+            <label class="block text-sm mb-1">Username</label>
+            <input id="loginUsername" type="text" required
+              class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label class="block text-sm mb-1">Password</label>
+            <input id="loginPassword" type="password" required
+              class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div id="loginError" class="hidden text-xs px-3 py-2 rounded bg-red-500/10 text-red-300"></div>
+          <button id="loginBtn" type="submit"
+            class="w-full py-2.5 rounded-lg text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-900">
+            Sign In
+          </button>
+        </form>
+      `;
+      }
+
+      function renderRegisterForm() {
+        return `
+        <form id="registerForm" class="space-y-4">
+          <div>
+            <label class="block text-sm mb-1">Gmail Address</label>
+            <input id="registerEmail" type="email" required
+              class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="yourname@gmail.com" />
+          </div>
+          <div>
+            <label class="block text-sm mb-1">Username</label>
+            <input id="registerUsername" type="text" required
+              class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label class="block text-sm mb-1">Password</label>
+            <input id="registerPassword" type="password" required
+              class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div id="registerError" class="hidden text-xs px-3 py-2 rounded bg-red-500/10 text-red-300"></div>
+          <div id="registerSuccess" class="hidden text-xs px-3 py-2 rounded bg-emerald-500/10 text-emerald-300"></div>
+          <button id="registerBtn" type="submit"
+            class="w-full py-2.5 rounded-lg text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-900">
+            Register & Verify Email
+          </button>
+        </form>
+      `;
+      }
+
+      function renderAdmin() {
+        const pending = usersCache.filter(
+          (u) => u.role === "reseller" && u.emailVerified && u.status !== "approved"
+        );
+        const allResellers = usersCache.filter((u) => u.role === "reseller");
+
+        return `
+        <div class="min-h-screen flex bg-slate-900 text-slate-100">
+          <!-- Sidebar -->
+          <aside class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col">
+            <div class="px-4 py-4 border-b border-slate-800">
+              <div class="text-lg font-bold tracking-tight">
+                Rasster<span class="text-emerald-400">Auth</span>
+              </div>
+              <div class="text-xs text-slate-400 mt-1">Admin Panel</div>
+            </div>
+            <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
+              <div class="px-3 py-2 rounded-lg bg-slate-800 text-emerald-300 font-medium flex items-center justify-between">
+                <span>Dashboard</span>
+                <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">ADMIN</span>
+              </div>
+              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
+                Resellers
+              </div>
+              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
+                Settings
+              </div>
+            </nav>
+            <div class="px-4 py-4 border-t border-slate-800 text-xs text-slate-400 flex justify-between items-center">
+              <span>Logged in as <b>Admin</b></span>
+              <button id="logoutBtn" class="text-red-400 hover:text-red-300">Logout</button>
+            </div>
+          </aside>
+
+          <!-- Main -->
+          <main class="flex-1 p-6 space-y-6">
+            <div class="flex flex-wrap gap-4">
+              <div class="flex-1 min-w-[180px] p-4 rounded-2xl bg-slate-800 border border-slate-700">
+                <div class="text-xs text-slate-400">Pending approvals</div>
+                <div class="mt-1 text-2xl font-bold">${pending.length}</div>
+              </div>
+              <div class="flex-1 min-w-[180px] p-4 rounded-2xl bg-slate-800 border border-slate-700">
+                <div class="text-xs text-slate-400">Total resellers</div>
+                <div class="mt-1 text-2xl font-bold">${allResellers.length}</div>
+              </div>
+            </div>
+
+            <section class="bg-slate-900/80 border border-slate-700 rounded-2xl p-5">
+              <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-semibold">Pending verified resellers</h2>
+                <button id="refreshUsersBtn"
+                  class="text-xs px-3 py-1 rounded-full border border-slate-600 hover:border-emerald-400">
+                  Refresh
+                </button>
+              </div>
+              ${
+                pending.length === 0
+                  ? `<p class="text-sm text-slate-400">No verified users waiting for approval.</p>`
+                  : `
+                <div class="overflow-x-auto text-sm">
+                  <table class="min-w-full border border-slate-700 rounded-lg overflow-hidden">
+                    <thead class="bg-slate-800 text-slate-300">
+                      <tr>
+                        <th class="px-3 py-2 text-left">Username</th>
+                        <th class="px-3 py-2 text-left">Email</th>
+                        <th class="px-3 py-2 text-left">Status</th>
+                        <th class="px-3 py-2 text-left">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800">
+                      ${pending
+                        .map(
+                          (u) => `
+                        <tr>
+                          <td class="px-3 py-2">${u.username}</td>
+                          <td class="px-3 py-2">${u.email}</td>
+                          <td class="px-3 py-2">
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-300">
+                              ${u.status}
+                            </span>
+                          </td>
+                          <td class="px-3 py-2">
+                            <button class="approveBtn text-xs px-3 py-1 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-900"
+                              data-user-id="${u.id}">
+                              Approve
+                            </button>
+                          </td>
+                        </tr>
+                      `
+                        )
+                        .join("")}
+                    </tbody>
+                  </table>
+                </div>
+              `
+              }
+            </section>
+
+            <section class="bg-slate-900/80 border border-slate-700 rounded-2xl p-5">
+              <h2 class="text-lg font-semibold mb-3">All resellers</h2>
+              ${
+                allResellers.length === 0
+                  ? `<p class="text-sm text-slate-400">No resellers yet.</p>`
+                  : `
+                <div class="overflow-x-auto text-sm">
+                  <table class="min-w-full border border-slate-700 rounded-lg overflow-hidden">
+                    <thead class="bg-slate-800 text-slate-300">
+                      <tr>
+                        <th class="px-3 py-2 text-left">Username</th>
+                        <th class="px-3 py-2 text-left">Email</th>
+                        <th class="px-3 py-2 text-left">Email Verified</th>
+                        <th class="px-3 py-2 text-left">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800">
+                      ${allResellers
+                        .map(
+                          (u) => `
+                        <tr>
+                          <td class="px-3 py-2">${u.username}</td>
+                          <td class="px-3 py-2">${u.email}</td>
+                          <td class="px-3 py-2">
+                            ${
+                              u.emailVerified
+                                ? '<span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300">Yes</span>'
+                                : '<span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-300">No</span>'
+                            }
+                          </td>
+                          <td class="px-3 py-2 text-xs">
+                            ${
+                              u.status === "approved"
+                                ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300">approved</span>'
+                                : `<span class="px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-300">${u.status}</span>`
+                            }
+                          </td>
+                        </tr>
+                      `
+                        )
+                        .join("")}
+                    </tbody>
+                  </table>
+                </div>
+              `
+              }
+            </section>
           </main>
         </div>
       `;
       }
 
-      function renderLogin(config) {
+      function renderReseller() {
         return `
-        <div class="w-full h-full flex items-center justify-center p-4" style="background-color: ${
-          config.background_color || defaultConfig.background_color
-        }">
-          <div class="w-full max-w-md p-8 rounded-lg shadow-lg" style="background-color: ${
-            config.surface_color || defaultConfig.surface_color
-          }">
-            <div class="flex justify-between items-center mb-6">
-              <h1 class="text-2xl font-bold" style="color: ${
-                config.text_color || defaultConfig.text_color
-              }">${config.site_title || defaultConfig.site_title}</h1>
-              <button id="backToLandingFromLogin" class="text-sm underline" style="color: ${
-                config.secondary_action_color ||
-                defaultConfig.secondary_action_color
-              }">Back</button>
+        <div class="min-h-screen flex bg-slate-900 text-slate-100">
+          <!-- Sidebar -->
+          <aside class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col">
+            <div class="px-4 py-4 border-b border-slate-800">
+              <div class="text-lg font-bold tracking-tight">
+                <span class="text-emerald-400">RASTER</span>
+              </div>
+              <div class="text-xs text-slate-400 mt-1">Reseller Panel</div>
             </div>
-            <h2 class="text-xl mb-6 text-center" style="color: ${
-              config.text_color || defaultConfig.text_color
-            }">${config.login_heading || defaultConfig.login_heading}</h2>
-            
-            <form id="loginForm" class="space-y-4">
-              <div>
-                <label for="loginUsername" class="block mb-2 font-medium" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">Username</label>
-                <input type="text" id="loginUsername" required class="w-full px-4 py-2 border rounded-lg bg-transparent" style="border-color: ${
-                  config.secondary_action_color ||
-                  defaultConfig.secondary_action_color
-                }">
+            <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
+              <div class="px-3 py-2 rounded-lg bg-slate-800 text-emerald-300 font-medium">
+                Dashboard
               </div>
-              
-              <div>
-                <label for="loginPassword" class="block mb-2 font-medium" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">Password</label>
-                <input type="password" id="loginPassword" required class="w-full px-4 py-2 border rounded-lg bg-transparent" style="border-color: ${
-                  config.secondary_action_color ||
-                  defaultConfig.secondary_action_color
-                }">
+              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
+                Licenses
               </div>
-              
-              <div id="loginError" class="hidden p-3 rounded text-sm" style="background-color: #fee; color: #c00"></div>
-              
-              <button type="submit" id="loginBtn" class="w-full py-3 rounded-lg font-semibold text-white transition-colors" style="background-color: ${
-                config.primary_action_color ||
-                defaultConfig.primary_action_color
-              }">
-                Sign In
-              </button>
-            </form>
-            
-            <p class="mt-6 text-center" style="color: ${
-              config.secondary_action_color ||
-              defaultConfig.secondary_action_color
-            }">
-              Don't have an account? 
-              <button id="switchToRegister" class="font-semibold underline" style="color: ${
-                config.primary_action_color ||
-                defaultConfig.primary_action_color
-              }">Create Account</button>
-            </p>
-          </div>
+              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
+                Clients
+              </div>
+              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
+                Payments
+              </div>
+              <div class="px-3 py-2 rounded-lg hover:bg-slate-800 cursor-default text-slate-300">
+                Settings
+              </div>
+            </nav>
+            <div class="px-4 py-4 border-t border-slate-800 text-xs text-slate-400 flex justify-between items-center">
+              <span>${currentUser?.username}</span>
+              <button id="logoutBtn" class="text-red-400 hover:text-red-300">Logout</button>
+            </div>
+          </aside>
+
+          <!-- Main -->
+          <main class="flex-1 p-6 space-y-6">
+            <div class="flex flex-wrap gap-4">
+              <div class="flex-1 min-w-[180px] p-4 rounded-2xl bg-slate-800 border border-slate-700">
+                <div class="text-xs text-slate-400">Welcome</div>
+                <div class="mt-1 text-xl font-bold">Hello, ${
+                  currentUser?.username
+                }</div>
+                <div class="mt-1 text-xs text-slate-400">
+                  Your account is active as <b>reseller</b>.
+                </div>
+              </div>
+              <div class="flex-1 min-w-[180px] p-4 rounded-2xl bg-slate-800 border border-slate-700">
+                <div class="text-xs text-slate-400">Status</div>
+                <div class="mt-1 text-xl font-bold text-emerald-400">Approved</div>
+                <div class="mt-1 text-xs text-slate-400">
+                  You can now manage your clients and licenses.
+                </div>
+              </div>
+            </div>
+
+            <section class="bg-slate-900/80 border border-slate-700 rounded-2xl p-5">
+              <h2 class="text-lg font-semibold mb-2">Quick Stats</h2>
+              <p class="text-sm text-slate-400 mb-3">
+                (Demo only) This is placeholder content – you can add real license and client statistics here.
+              </p>
+              <div class="grid sm:grid-cols-3 gap-4 text-sm">
+                <div class="p-3 rounded-xl bg-slate-800 border border-slate-700">
+                  <div class="text-xs text-slate-400">Total licenses</div>
+                  <div class="text-xl font-bold mt-1">0</div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800 border border-slate-700">
+                  <div class="text-xs text-slate-400">Active clients</div>
+                  <div class="text-xl font-bold mt-1">0</div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800 border border-slate-700">
+                  <div class="text-xs text-slate-400">Expiring soon</div>
+                  <div class="text-xl font-bold mt-1">0</div>
+                </div>
+              </div>
+            </section>
+          </main>
         </div>
       `;
       }
 
-      function renderRegister(config) {
-        return `
-        <div class="w-full h-full flex items-center justify-center p-4" style="background-color: ${
-          config.background_color || defaultConfig.background_color
-        }">
-          <div class="w-full max-w-md p-8 rounded-lg shadow-lg" style="background-color: ${
-            config.surface_color || defaultConfig.surface_color
-          }">
-            <div class="flex justify-between items-center mb-6">
-              <h1 class="text-2xl font-bold" style="color: ${
-                config.text_color || defaultConfig.text_color
-              }">${config.site_title || defaultConfig.site_title}</h1>
-              <button id="backToLandingFromRegister" class="text-sm underline" style="color: ${
-                config.secondary_action_color ||
-                defaultConfig.secondary_action_color
-              }">Back</button>
-            </div>
-            <h2 class="text-xl mb-6 text-center" style="color: ${
-              config.text_color || defaultConfig.text_color
-            }">${config.register_heading || defaultConfig.register_heading}</h2>
-            
-            <form id="registerForm" class="space-y-4">
-              <div>
-                <label for="registerEmail" class="block mb-2 font-medium" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">Email (Gmail only)</label>
-                <input type="email" id="registerEmail" required class="w-full px-4 py-2 border rounded-lg bg-transparent" style="border-color: ${
-                  config.secondary_action_color ||
-                  defaultConfig.secondary_action_color
-                }">
-              </div>
-              
-              <div>
-                <label for="registerUsername" class="block mb-2 font-medium" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">Username</label>
-                <input type="text" id="registerUsername" required class="w-full px-4 py-2 border rounded-lg bg-transparent" style="border-color: ${
-                  config.secondary_action_color ||
-                  defaultConfig.secondary_action_color
-                }">
-              </div>
-              
-              <div>
-                <label for="registerPassword" class="block mb-2 font-medium" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">Password</label>
-                <input type="password" id="registerPassword" required class="w-full px-4 py-2 border rounded-lg bg-transparent" style="border-color: ${
-                  config.secondary_action_color ||
-                  defaultConfig.secondary_action_color
-                }">
-              </div>
-              
-              <div id="registerError" class="hidden p-3 rounded text-sm" style="background-color: #fee; color: #c00"></div>
-              <div id="registerSuccess" class="hidden p-3 rounded text-sm" style="background-color: #efe; color: #060"></div>
-              
-              <button type="submit" id="registerBtn" class="w-full py-3 rounded-lg font-semibold text-white transition-colors" style="background-color: ${
-                config.primary_action_color ||
-                defaultConfig.primary_action_color
-              }">
-                Register
-              </button>
-            </form>
-            
-            <p class="mt-6 text-center" style="color: ${
-              config.secondary_action_color ||
-              defaultConfig.secondary_action_color
-            }">
-              Already have an account? 
-              <button id="switchToLogin" class="font-semibold underline" style="color: ${
-                config.primary_action_color ||
-                defaultConfig.primary_action_color
-              }">Sign In</button>
-            </p>
-          </div>
-        </div>
-      `;
-      }
+      // =========================
+      // EVENT HANDLERS
+      // =========================
+      function attachEvents() {
+        const enterBtn = document.getElementById("enterBtn");
+        if (enterBtn) {
+          enterBtn.addEventListener("click", () => {
+            view = "auth";
+            authMode = "login";
+            render();
+          });
+        }
 
-      function renderAdminDashboard(config) {
-        const pendingForApproval = allUsers.filter(
-          (u) =>
-            u.role === "reseller" &&
-            u.emailVerified === true &&
-            u.status !== "approved"
-        );
+        const learnBtn = document.getElementById("learnBtn");
+        if (learnBtn) {
+          learnBtn.addEventListener("click", () => {
+            alert(
+              "RassterAuth: Admin approves resellers, email verification via Brevo, users stored in Google Sheets."
+            );
+          });
+        }
 
-        const approvedUsers = allUsers.filter(
-          (u) => u.role === "reseller" && u.status === "approved"
-        );
+        const backToWelcomeBtn = document.getElementById("backToWelcomeBtn");
+        if (backToWelcomeBtn) {
+          backToWelcomeBtn.addEventListener("click", () => {
+            view = "welcome";
+            render();
+          });
+        }
 
-        const unverifiedUsers = allUsers.filter(
-          (u) => u.role === "reseller" && !u.emailVerified
-        );
+        const tabLogin = document.getElementById("tabLogin");
+        if (tabLogin) {
+          tabLogin.addEventListener("click", () => {
+            authMode = "login";
+            render();
+          });
+        }
 
-        return `
-        <div class="w-full h-full p-6" style="background-color: ${
-          config.background_color || defaultConfig.background_color
-        }">
-          <div class="max-w-6xl mx-auto">
-            <div class="flex justify-between items-center mb-6">
-              <h1 class="text-3xl font-bold" style="color: ${
-                config.text_color || defaultConfig.text_color
-              }">Admin Dashboard – RassterAuth</h1>
-              <button id="logoutBtn" class="px-4 py-2 rounded-lg font-semibold" style="background-color: ${
-                config.secondary_action_color ||
-                defaultConfig.secondary_action_color
-              }; color: white">
-                Logout
-              </button>
-            </div>
-            
-            <div class="grid gap-6 lg:grid-cols-3 mb-8">
-              <div class="p-4 rounded-lg shadow" style="background-color: ${
-                config.surface_color || defaultConfig.surface_color
-              }">
-                <p class="text-sm mb-1" style="color: ${
-                  config.secondary_action_color ||
-                  defaultConfig.secondary_action_color
-                }">Pending approval</p>
-                <p class="text-2xl font-bold" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">${pendingForApproval.length}</p>
-              </div>
-              <div class="p-4 rounded-lg shadow" style="background-color: ${
-                config.surface_color || defaultConfig.surface_color
-              }">
-                <p class="text-sm mb-1" style="color: ${
-                  config.secondary_action_color ||
-                  defaultConfig.secondary_action_color
-                }">Approved resellers</p>
-                <p class="text-2xl font-bold" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">${approvedUsers.length}</p>
-              </div>
-              <div class="p-4 rounded-lg shadow" style="background-color: ${
-                config.surface_color || defaultConfig.surface_color
-              }">
-                <p class="text-sm mb-1" style="color: ${
-                  config.secondary_action_color ||
-                  defaultConfig.secondary_action_color
-                }">Unverified emails</p>
-                <p class="text-2xl font-bold" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">${unverifiedUsers.length}</p>
-              </div>
-            </div>
+        const tabRegister = document.getElementById("tabRegister");
+        if (tabRegister) {
+          tabRegister.addEventListener("click", () => {
+            authMode = "register";
+            render();
+          });
+        }
 
-            <div class="mb-8 p-6 rounded-lg shadow" style="background-color: ${
-              config.surface_color || defaultConfig.surface_color
-            }">
-              <h2 class="text-2xl font-bold mb-4" style="color: ${
-                config.text_color || defaultConfig.text_color
-              }">Verified users waiting for approval (${
-          pendingForApproval.length
-        })</h2>
-              ${
-                pendingForApproval.length === 0
-                  ? `<p style="color: ${
-                      config.secondary_action_color ||
-                      defaultConfig.secondary_action_color
-                    }">No verified users pending admin approval.</p>`
-                  : `<div class="space-y-3">
-                  ${pendingForApproval
-                    .map(
-                      (user) => `
-                    <div class="flex justify-between items-center p-4 border rounded-lg" style="border-color: ${
-                      config.secondary_action_color ||
-                      defaultConfig.secondary_action_color
-                    }">
-                      <div>
-                        <p class="font-semibold" style="color: ${
-                          config.text_color || defaultConfig.text_color
-                        }">${user.username}</p>
-                        <p class="text-sm" style="color: ${
-                          config.secondary_action_color ||
-                          defaultConfig.secondary_action_color
-                        }">${user.email}</p>
-                      </div>
-                      <button class="approve-btn px-4 py-2 rounded-lg font-semibold text-white" data-user-id="${
-                        user.id
-                      }" style="background-color: ${
-                          config.primary_action_color ||
-                          defaultConfig.primary_action_color
-                        }">
-                        Approve
-                      </button>
-                    </div>
-                  `
-                    )
-                    .join("")}
-                </div>`
-              }
-            </div>
-            
-            <div class="mb-8 p-6 rounded-lg shadow" style="background-color: ${
-              config.surface_color || defaultConfig.surface_color
-            }">
-              <h2 class="text-2xl font-bold mb-4" style="color: ${
-                config.text_color || defaultConfig.text_color
-              }">Approved Resellers (${approvedUsers.length})</h2>
-              ${
-                approvedUsers.length === 0
-                  ? `<p style="color: ${
-                      config.secondary_action_color ||
-                      defaultConfig.secondary_action_color
-                    }">No approved users yet.</p>`
-                  : `<div class="space-y-2">
-                  ${approvedUsers
-                    .map(
-                      (user) => `
-                    <div class="flex justify-between items-center p-4 border rounded-lg" style="border-color: ${
-                      config.secondary_action_color ||
-                      defaultConfig.secondary_action_color
-                    }">
-                      <div>
-                        <p class="font-semibold" style="color: ${
-                          config.text_color || defaultConfig.text_color
-                        }">${user.username}</p>
-                        <p class="text-sm" style="color: ${
-                          config.secondary_action_color ||
-                          defaultConfig.secondary_action_color
-                        }">${user.email} • ${user.role}</p>
-                      </div>
-                    </div>
-                  `
-                    )
-                    .join("")}
-                </div>`
-              }
-            </div>
-
-            <div class="p-6 rounded-lg shadow" style="background-color: ${
-              config.surface_color || defaultConfig.surface_color
-            }">
-              <h2 class="text-2xl font-bold mb-4" style="color: ${
-                config.text_color || defaultConfig.text_color
-              }">Unverified Users (${unverifiedUsers.length})</h2>
-              <p class="text-sm mb-3" style="color: ${
-                config.secondary_action_color ||
-                defaultConfig.secondary_action_color
-              }">These users have registered but have not yet verified their Gmail address.</p>
-              ${
-                unverifiedUsers.length === 0
-                  ? `<p style="color: ${
-                      config.secondary_action_color ||
-                      defaultConfig.secondary_action_color
-                    }">No unverified users.</p>`
-                  : `<div class="space-y-2">
-                  ${unverifiedUsers
-                    .map(
-                      (user) => `
-                    <div class="flex justify-between items-center p-4 border rounded-lg" style="border-color: ${
-                      config.secondary_action_color ||
-                      defaultConfig.secondary_action_color
-                    }">
-                      <div>
-                        <p class="font-semibold" style="color: ${
-                          config.text_color || defaultConfig.text_color
-                        }">${user.username}</p>
-                        <p class="text-sm" style="color: ${
-                          config.secondary_action_color ||
-                          defaultConfig.secondary_action_color
-                        }">${user.email}</p>
-                      </div>
-                    </div>
-                  `
-                    )
-                    .join("")}
-                </div>`
-              }
-            </div>
-          </div>
-        </div>
-      `;
-      }
-
-      function renderUserDashboard(config) {
-        return `
-        <div class="w-full h-full flex items-center justify-center p-4" style="background-color: ${
-          config.background_color || defaultConfig.background_color
-        }">
-          <div class="w-full max-w-2xl p-8 rounded-lg shadow-lg" style="background-color: ${
-            config.surface_color || defaultConfig.surface_color
-          }">
-            <div class="flex justify-between items-center mb-6">
-              <h1 class="text-3xl font-bold" style="color: ${
-                config.text_color || defaultConfig.text_color
-              }">Welcome, ${currentUser.username}!</h1>
-              <button id="logoutBtn" class="px-4 py-2 rounded-lg font-semibold" style="background-color: ${
-                config.secondary_action_color ||
-                defaultConfig.secondary_action_color
-              }; color: white">
-                Logout
-              </button>
-            </div>
-            
-            <div class="space-y-4">
-              <div class="p-4 border rounded-lg" style="border-color: ${
-                config.secondary_action_color ||
-                defaultConfig.secondary_action_color
-              }">
-                <p class="font-semibold mb-1" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">Email</p>
-                <p style="color: ${
-                  config.secondary_action_color ||
-                  defaultConfig.secondary_action_color
-                }">${currentUser.email}</p>
-              </div>
-              
-              <div class="p-4 border rounded-lg" style="border-color: ${
-                config.secondary_action_color ||
-                defaultConfig.secondary_action_color
-              }">
-                <p class="font-semibold mb-1" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">Role</p>
-                <p style="color: ${
-                  config.secondary_action_color ||
-                  defaultConfig.secondary_action_color
-                }">${currentUser.role}</p>
-              </div>
-
-              <div class="p-4 border rounded-lg" style="border-color: ${
-                config.secondary_action_color ||
-                defaultConfig.secondary_action_color
-              }">
-                <p class="font-semibold mb-1" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">Email Verification</p>
-                <p style="color: ${
-                  currentUser.emailVerified ? "#16a34a" : "#f97316"
-                }">
-                  ${currentUser.emailVerified ? "Verified" : "Not Verified"}
-                </p>
-              </div>
-              
-              <div class="p-4 border rounded-lg" style="border-color: ${
-                config.secondary_action_color ||
-                defaultConfig.secondary_action_color
-              }">
-                <p class="font-semibold mb-1" style="color: ${
-                  config.text_color || defaultConfig.text_color
-                }">Admin Approval Status</p>
-                <p style="color: ${
-                  currentUser.status === "approved" ? "#16a34a" : "#f97316"
-                }">${
-          currentUser.status === "approved" ? "Approved" : "Pending Approval"
-        }</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-      }
-
-      // ========== EVENTS & HANDLERS ==========
-
-      function attachEventListeners(config) {
         const loginForm = document.getElementById("loginForm");
         if (loginForm) {
           loginForm.addEventListener("submit", handleLogin);
@@ -595,110 +492,78 @@
           registerForm.addEventListener("submit", handleRegister);
         }
 
-        const switchToRegister = document.getElementById("switchToRegister");
-        if (switchToRegister) {
-          switchToRegister.addEventListener("click", () => {
-            currentView = "register";
-            renderApp();
-          });
-        }
-
-        const switchToLogin = document.getElementById("switchToLogin");
-        if (switchToLogin) {
-          switchToLogin.addEventListener("click", () => {
-            currentView = "login";
-            renderApp();
-          });
-        }
-
         const logoutBtn = document.getElementById("logoutBtn");
         if (logoutBtn) {
           logoutBtn.addEventListener("click", () => {
             currentUser = null;
-            currentView = "landing";
-            renderApp();
+            view = "auth";
+            authMode = "login";
+            render();
           });
         }
 
-        const approveButtons = document.querySelectorAll(".approve-btn");
-        approveButtons.forEach((btn) => {
-          btn.addEventListener("click", () => handleApproval(btn.dataset.userId));
+        const refreshUsersBtn = document.getElementById("refreshUsersBtn");
+        if (refreshUsersBtn) {
+          refreshUsersBtn.addEventListener("click", () => {
+            loadUsersForAdmin();
+          });
+        }
+
+        const approveBtns = document.querySelectorAll(".approveBtn");
+        approveBtns.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const userId = btn.getAttribute("data-user-id");
+            approveUser(userId);
+          });
         });
-
-        const landingGetStarted = document.getElementById("landingGetStarted");
-        if (landingGetStarted) {
-          landingGetStarted.addEventListener("click", () => {
-            currentView = "register";
-            renderApp();
-          });
-        }
-
-        const landingSignIn = document.getElementById("landingSignIn");
-        if (landingSignIn) {
-          landingSignIn.addEventListener("click", () => {
-            currentView = "login";
-            renderApp();
-          });
-        }
-
-        const landingSignUp = document.getElementById("landingSignUp");
-        if (landingSignUp) {
-          landingSignUp.addEventListener("click", () => {
-            currentView = "register";
-            renderApp();
-          });
-        }
-
-        const backToLandingFromLogin = document.getElementById(
-          "backToLandingFromLogin"
-        );
-        if (backToLandingFromLogin) {
-          backToLandingFromLogin.addEventListener("click", () => {
-            currentView = "landing";
-            renderApp();
-          });
-        }
-
-        const backToLandingFromRegister = document.getElementById(
-          "backToLandingFromRegister"
-        );
-        if (backToLandingFromRegister) {
-          backToLandingFromRegister.addEventListener("click", () => {
-            currentView = "landing";
-            renderApp();
-          });
-        }
       }
 
       async function handleLogin(e) {
         e.preventDefault();
-
         const username = document.getElementById("loginUsername").value.trim();
-        const password = document.getElementById("loginPassword").value.trim();
+        const password = document.getElementById("loginPassword").value;
         const errorDiv = document.getElementById("loginError");
         const loginBtn = document.getElementById("loginBtn");
 
-        loginBtn.disabled = true;
-        loginBtn.textContent = "Signing in...";
         errorDiv.classList.add("hidden");
+        errorDiv.textContent = "";
 
-        const user = allUsers.find(
-          (u) => u.username === username && u.password === password
-        );
-
-        if (!user) {
-          errorDiv.textContent = "Invalid username or password";
-          errorDiv.classList.remove("hidden");
-          loginBtn.disabled = false;
-          loginBtn.textContent = "Sign In";
+        // Admin login (front-end only)
+        if (username === "Admin" && password === "Admin") {
+          currentUser = { username: "Admin", role: "admin" };
+          view = "admin";
+          await loadUsersForAdmin();
           return;
         }
 
-        // For resellers: enforce email verification and admin approval
-        if (user.role !== "admin") {
+        loginBtn.disabled = true;
+        loginBtn.textContent = "Signing in...";
+
+        try {
+          const res = await fetch(API_BASE, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: "login",
+              username,
+              password,
+            }),
+          });
+          const data = await res.json();
+
+          if (!data.ok) {
+            errorDiv.textContent = data.error || "Login failed";
+            errorDiv.classList.remove("hidden");
+            loginBtn.disabled = false;
+            loginBtn.textContent = "Sign In";
+            return;
+          }
+
+          const user = data.user;
+
           if (!user.emailVerified) {
             errorDiv.textContent =
-              "Please verify your Gmail address from the email we sent before logging in.";
+              "Please verify your email first (check your Gmail inbox).";
             errorDiv.classList.remove("hidden");
             loginBtn.disabled = false;
             loginBtn.textContent = "Sign In";
@@ -707,46 +572,42 @@
 
           if (user.status !== "approved") {
             errorDiv.textContent =
-              "Your account is verified but still pending admin approval.";
+              "Your account is waiting for admin approval.";
             errorDiv.classList.remove("hidden");
             loginBtn.disabled = false;
             loginBtn.textContent = "Sign In";
             return;
           }
-        }
 
-        currentUser = user;
-        loginBtn.disabled = false;
-        loginBtn.textContent = "Sign In";
-        renderApp();
+          currentUser = user;
+          view = "reseller";
+          render();
+        } catch (err) {
+          console.error(err);
+          errorDiv.textContent = "Network error. Please try again.";
+          errorDiv.classList.remove("hidden");
+        } finally {
+          loginBtn.disabled = false;
+          loginBtn.textContent = "Sign In";
+        }
       }
 
       async function handleRegister(e) {
         e.preventDefault();
-
-        if (allUsers.length >= 999) {
-          const errorDiv = document.getElementById("registerError");
-          errorDiv.textContent =
-            "Maximum user limit reached. Please contact administrator.";
-          errorDiv.classList.remove("hidden");
-          return;
-        }
-
         const email = document.getElementById("registerEmail").value.trim();
         const username = document
           .getElementById("registerUsername")
           .value.trim();
-        const password = document
-          .getElementById("registerPassword")
-          .value.trim();
+        const password = document.getElementById("registerPassword").value;
         const errorDiv = document.getElementById("registerError");
         const successDiv = document.getElementById("registerSuccess");
         const registerBtn = document.getElementById("registerBtn");
 
         errorDiv.classList.add("hidden");
         successDiv.classList.add("hidden");
+        errorDiv.textContent = "";
+        successDiv.textContent = "";
 
-        // Gmail only
         if (!email.toLowerCase().endsWith("@gmail.com")) {
           errorDiv.textContent = "Only Gmail addresses are allowed.";
           errorDiv.classList.remove("hidden");
@@ -756,135 +617,81 @@
         registerBtn.disabled = true;
         registerBtn.textContent = "Registering...";
 
-        const existingUser = allUsers.find(
-          (u) => u.username === username || u.email === email
-        );
-        if (existingUser) {
-          errorDiv.textContent = "Username or email already exists";
+        try {
+          const res = await fetch(API_BASE, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: "register",
+              email,
+              username,
+              password,
+            }),
+          });
+          const data = await res.json();
+
+          if (!data.ok) {
+            errorDiv.textContent = data.error || "Registration failed.";
+            errorDiv.classList.remove("hidden");
+          } else {
+            successDiv.textContent =
+              "Registered successfully! Check your Gmail inbox and click the verification link.";
+            successDiv.classList.remove("hidden");
+            (document.getElementById("registerForm") || {}).reset?.();
+          }
+        } catch (err) {
+          console.error(err);
+          errorDiv.textContent = "Network error. Please try again.";
           errorDiv.classList.remove("hidden");
+        } finally {
           registerBtn.disabled = false;
-          registerBtn.textContent = "Register";
-          return;
-        }
-
-        const newUser = {
-          id: Date.now().toString(),
-          email: email,
-          username: username,
-          password: password,
-          role: "reseller",
-          status: "pending", // pending admin approval
-          emailVerified: false, // will become true after email verification
-          createdAt: new Date().toISOString(),
-        };
-
-        // HERE you would call your backend to send verification email
-        // e.g. await api.sendVerificationEmail(newUser);
-
-        const result = await window.dataSdk.create(newUser);
-
-        if (result.isOk) {
-          successDiv.textContent =
-            "Registration successful! We sent a verification link to your Gmail. Verify your email first, then wait for admin approval.";
-          successDiv.classList.remove("hidden");
-          document.getElementById("registerForm").reset();
-        } else {
-          errorDiv.textContent = "Registration failed. Please try again.";
-          errorDiv.classList.remove("hidden");
-        }
-
-        registerBtn.disabled = false;
-        registerBtn.textContent = "Register";
-      }
-
-      async function handleApproval(userId) {
-        const user = allUsers.find((u) => u.id === userId);
-        if (!user) return;
-
-        const updatedUser = { ...user, status: "approved" };
-        const result = await window.dataSdk.update(updatedUser);
-
-        if (!result.isOk) {
-          alert("Failed to approve user. Please try again.");
+          registerBtn.textContent = "Register & Verify Email";
         }
       }
 
-      async function onConfigChange(config) {
-        renderApp();
+      async function loadUsersForAdmin() {
+        try {
+          const res = await fetch(API_BASE + "?mode=listUsers");
+          const data = await res.json();
+          if (data.ok) {
+            usersCache = data.users || [];
+            render();
+          } else {
+            alert("Failed to load users.");
+          }
+        } catch (err) {
+          console.error(err);
+          alert("Network error while loading users.");
+        }
       }
 
-      if (window.elementSdk) {
-        window.elementSdk.init({
-          defaultConfig,
-          onConfigChange,
-          mapToCapabilities: (config) => ({
-            recolorables: [
-              {
-                get: () =>
-                  config.background_color || defaultConfig.background_color,
-                set: (value) => {
-                  config.background_color = value;
-                  window.elementSdk.setConfig({ background_color: value });
-                },
-              },
-              {
-                get: () =>
-                  config.surface_color || defaultConfig.surface_color,
-                set: (value) => {
-                  config.surface_color = value;
-                  window.elementSdk.setConfig({ surface_color: value });
-                },
-              },
-              {
-                get: () => config.text_color || defaultConfig.text_color,
-                set: (value) => {
-                  config.text_color = value;
-                  window.elementSdk.setConfig({ text_color: value });
-                },
-              },
-              {
-                get: () =>
-                  config.primary_action_color ||
-                  defaultConfig.primary_action_color,
-                set: (value) => {
-                  config.primary_action_color = value;
-                  window.elementSdk.setConfig({
-                    primary_action_color: value,
-                  });
-                },
-              },
-              {
-                get: () =>
-                  config.secondary_action_color ||
-                  defaultConfig.secondary_action_color,
-                set: (value) => {
-                  config.secondary_action_color = value;
-                  window.elementSdk.setConfig({
-                    secondary_action_color: value,
-                  });
-                },
-              },
-            ],
-            borderables: [],
-            fontEditable: undefined,
-            fontSizeable: undefined,
-          }),
-          mapToEditPanelValues: (config) =>
-            new Map([
-              ["site_title", config.site_title || defaultConfig.site_title],
-              [
-                "login_heading",
-                config.login_heading || defaultConfig.login_heading,
-              ],
-              [
-                "register_heading",
-                config.register_heading || defaultConfig.register_heading,
-              ],
-            ]),
-        });
+      async function approveUser(userId) {
+        if (!confirm("Approve this reseller?")) return;
+        try {
+          const res = await fetch(API_BASE, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: "approve",
+              userId,
+            }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            await loadUsersForAdmin();
+          } else {
+            alert(data.error || "Approval failed.");
+          }
+        } catch (err) {
+          console.error(err);
+          alert("Network error while approving user.");
+        }
       }
 
-      initApp();
+      // =========================
+      // INIT
+      // =========================
+      render();
     </script>
   </body>
 </html>
