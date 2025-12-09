@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RassterAuth – User Management System</title>
+    <script src="/_sdk/data_sdk.js"></script>
+    <script src="/_sdk/element_sdk.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        box-sizing: border-box;
+      }
+    </style>
+    <style>
+      @view-transition {
+        navigation: auto;
+      }
+    </style>
+  </head>
+  <body class="h-full">
+    <div id="app" class="w-full h-full overflow-auto"></div>
+
+    <script>
+      const defaultConfig = {
+        site_title: "RassterAuth",
+        login_heading: "Welcome Back",
+        register_heading: "Create RassterAuth Account",
+        background_color: "#0b1120",
+        surface_color: "#020617",
+        text_color: "#e5e7eb",
+        primary_action_color: "#4f46e5",
+        secondary_action_color: "#6b7280",
+      };
+
+      let allUsers = [];
+      let currentUser = null;
+      // start with landing page
+      let currentView = "landing";
+
+      // Ensure built-in admin exists (Admin / Admin)
+      async function ensureAdminUser() {
+        const admin = allUsers.find((u) => u.username === "Admin");
+        if (admin) return;
+
+        const adminUser = {
+          id: "rassterauth-admin",
+          email: "admin@rassterauth.local",
+          username: "Admin",
+          password: "Admin",
+          role: "admin",
+          status: "approved",
+          emailVerified: true,
+          createdAt: new Date().toISOString(),
+        };
+
+        await window.dataSdk.create(adminUser);
+      }
+
+      const dataHandler = {
+        async onDataChanged(data) {
+          allUsers = data || [];
+          // make sure we always have the admin
+          if (window.dataSdk) {
+            await ensureAdminUser();
+          }
+          renderApp();
+        },
+      };
+
+      async function initApp() {
+        const initResult = await window.dataSdk.init(dataHandler);
+        if (!initResult.isOk) {
+          console.error("Failed to initialize data SDK");
+          return;
+        }
+        renderApp();
+      }
+
+      function renderApp() {
+        const config = window.elementSdk?.config || defaultConfig;
+        const app = document.getElementById("app");
+
+        if (!currentUser) {
+          if (currentView === "landing") {
+            app.innerHTML = renderLanding(config);
+          } else if (currentView === "login") {
+            app.innerHTML = renderLogin(config);
+          } else {
+            app.innerHTML = renderRegister(config);
+          }
+        } else {
+          if (currentUser.role === "admin") {
+            app.innerHTML = renderAdminDashboard(config);
+          } else {
+            app.innerHTML = renderUserDashboard(config);
+          }
+        }
+
+        attachEventListeners(config);
+      }
+
+      // ========== VIEWS ==========
+
+      // Hero / welcome page like your screenshot
+      function renderLanding(config) {
+        return `
+        <div class="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+          <!-- Top nav -->
+          <header class="w-full px-8 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="h-8 w-8 rounded-full flex items-center justify-center bg-gradient-to-tr from-blue-500 to-emerald-400">
+                <span class="text-xs font-bold">RA</span>
+              </div>
+              <span class="font-semibold text-lg">RassterAuth</span>
+            </div>
+            <nav class="flex items-center gap-4">
+              <button id="landingSignIn" class="text-sm hover:underline">
+                Sign in
+              </button>
+              <button
+                id="landingSignUp"
+                class="text-sm px-4 py-2 rounded-lg font-semibold text-white"
+                style="background-color: ${
+                  config.primary_action_color ||
+                  defaultConfig.primary_action_color
+                }"
+              >
+                Sign Up
+              </button>
+            </nav>
+          </header>
+
+          <!-- Hero -->
+          <main class="flex-1 flex items-center justify-center px-4 pb-16">
+            <div class="max-w-3xl text-center">
+              <h1 class="text-3xl md:text-5xl font-bold mb-6 leading-tight">
+                The better way to manage your<br/>
+                application with
+                <span class="text-emerald-400">RassterAuth</span>
+              </h1>
+              <p class="text-slate-400 mb-10 max-w-xl mx-auto">
+                Secure license management, reseller control and powerful admin approval 
+                workflows — all in one dashboard.
+              </p>
+              <button
+                id="landingGetStarted"
+                class="px-8 py-3 rounded-lg font-semibold text-white text-sm md:text-base shadow-lg flex items-center gap-2 mx-auto"
+                style="background-color: ${
+                  config.primary_action_color ||
+                  defaultConfig.primary_action_color
+                }"
+              >
+                Get Started <span>➜</span>
+              </button>
+            </div>
+          </main>
+        </div>
+      `;
+      }
+
+      function renderLogin(config) {
+        return `
+        <div class="w-full h-full flex items-center justify-center p-4" style="background-color: ${
+          config.background_color || defaultConfig.background_color
+        }">
+          <div class="w-full max-w-md p-8 rounded-lg shadow-lg" style="background-color: ${
+            config.surface_color || defaultConfig.surface_color
+          }">
+            <div class="flex justify-between items-center mb-6">
+              <h1 class="text-2xl font-bold" style="color: ${
+                config.text_color || defaultConfig.text_color
+              }">${config.site_title || defaultConfig.site_title}</h1>
+              <button id="backToLandingFromLogin" class="text-sm underline" style="color: ${
+                config.secondary_action_color ||
+                defaultConfig.secondary_action_color
+              }">Back</button>
+            </div>
+            <h2 class="text-xl mb-6 text-center" style="color: ${
+              config.text_color || defaultConfig.text_color
+            }">${config.login_heading || defaultConfig.login_heading}</h2>
+            
+            <form id="loginForm" class="space-y-4">
+              <div>
+                <label for="loginUsername" class="block mb-2 font-medium" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">Username</label>
+                <input type="text" id="loginUsername" required class="w-full px-4 py-2 border rounded-lg bg-transparent" style="border-color: ${
+                  config.secondary_action_color ||
+                  defaultConfig.secondary_action_color
+                }">
+              </div>
+              
+              <div>
+                <label for="loginPassword" class="block mb-2 font-medium" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">Password</label>
+                <input type="password" id="loginPassword" required class="w-full px-4 py-2 border rounded-lg bg-transparent" style="border-color: ${
+                  config.secondary_action_color ||
+                  defaultConfig.secondary_action_color
+                }">
+              </div>
+              
+              <div id="loginError" class="hidden p-3 rounded text-sm" style="background-color: #fee; color: #c00"></div>
+              
+              <button type="submit" id="loginBtn" class="w-full py-3 rounded-lg font-semibold text-white transition-colors" style="background-color: ${
+                config.primary_action_color ||
+                defaultConfig.primary_action_color
+              }">
+                Sign In
+              </button>
+            </form>
+            
+            <p class="mt-6 text-center" style="color: ${
+              config.secondary_action_color ||
+              defaultConfig.secondary_action_color
+            }">
+              Don't have an account? 
+              <button id="switchToRegister" class="font-semibold underline" style="color: ${
+                config.primary_action_color ||
+                defaultConfig.primary_action_color
+              }">Create Account</button>
+            </p>
+          </div>
+        </div>
+      `;
+      }
+
+      function renderRegister(config) {
+        return `
+        <div class="w-full h-full flex items-center justify-center p-4" style="background-color: ${
+          config.background_color || defaultConfig.background_color
+        }">
+          <div class="w-full max-w-md p-8 rounded-lg shadow-lg" style="background-color: ${
+            config.surface_color || defaultConfig.surface_color
+          }">
+            <div class="flex justify-between items-center mb-6">
+              <h1 class="text-2xl font-bold" style="color: ${
+                config.text_color || defaultConfig.text_color
+              }">${config.site_title || defaultConfig.site_title}</h1>
+              <button id="backToLandingFromRegister" class="text-sm underline" style="color: ${
+                config.secondary_action_color ||
+                defaultConfig.secondary_action_color
+              }">Back</button>
+            </div>
+            <h2 class="text-xl mb-6 text-center" style="color: ${
+              config.text_color || defaultConfig.text_color
+            }">${config.register_heading || defaultConfig.register_heading}</h2>
+            
+            <form id="registerForm" class="space-y-4">
+              <div>
+                <label for="registerEmail" class="block mb-2 font-medium" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">Email (Gmail only)</label>
+                <input type="email" id="registerEmail" required class="w-full px-4 py-2 border rounded-lg bg-transparent" style="border-color: ${
+                  config.secondary_action_color ||
+                  defaultConfig.secondary_action_color
+                }">
+              </div>
+              
+              <div>
+                <label for="registerUsername" class="block mb-2 font-medium" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">Username</label>
+                <input type="text" id="registerUsername" required class="w-full px-4 py-2 border rounded-lg bg-transparent" style="border-color: ${
+                  config.secondary_action_color ||
+                  defaultConfig.secondary_action_color
+                }">
+              </div>
+              
+              <div>
+                <label for="registerPassword" class="block mb-2 font-medium" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">Password</label>
+                <input type="password" id="registerPassword" required class="w-full px-4 py-2 border rounded-lg bg-transparent" style="border-color: ${
+                  config.secondary_action_color ||
+                  defaultConfig.secondary_action_color
+                }">
+              </div>
+              
+              <div id="registerError" class="hidden p-3 rounded text-sm" style="background-color: #fee; color: #c00"></div>
+              <div id="registerSuccess" class="hidden p-3 rounded text-sm" style="background-color: #efe; color: #060"></div>
+              
+              <button type="submit" id="registerBtn" class="w-full py-3 rounded-lg font-semibold text-white transition-colors" style="background-color: ${
+                config.primary_action_color ||
+                defaultConfig.primary_action_color
+              }">
+                Register
+              </button>
+            </form>
+            
+            <p class="mt-6 text-center" style="color: ${
+              config.secondary_action_color ||
+              defaultConfig.secondary_action_color
+            }">
+              Already have an account? 
+              <button id="switchToLogin" class="font-semibold underline" style="color: ${
+                config.primary_action_color ||
+                defaultConfig.primary_action_color
+              }">Sign In</button>
+            </p>
+          </div>
+        </div>
+      `;
+      }
+
+      function renderAdminDashboard(config) {
+        const pendingForApproval = allUsers.filter(
+          (u) =>
+            u.role === "reseller" &&
+            u.emailVerified === true &&
+            u.status !== "approved"
+        );
+
+        const approvedUsers = allUsers.filter(
+          (u) => u.role === "reseller" && u.status === "approved"
+        );
+
+        const unverifiedUsers = allUsers.filter(
+          (u) => u.role === "reseller" && !u.emailVerified
+        );
+
+        return `
+        <div class="w-full h-full p-6" style="background-color: ${
+          config.background_color || defaultConfig.background_color
+        }">
+          <div class="max-w-6xl mx-auto">
+            <div class="flex justify-between items-center mb-6">
+              <h1 class="text-3xl font-bold" style="color: ${
+                config.text_color || defaultConfig.text_color
+              }">Admin Dashboard – RassterAuth</h1>
+              <button id="logoutBtn" class="px-4 py-2 rounded-lg font-semibold" style="background-color: ${
+                config.secondary_action_color ||
+                defaultConfig.secondary_action_color
+              }; color: white">
+                Logout
+              </button>
+            </div>
+            
+            <div class="grid gap-6 lg:grid-cols-3 mb-8">
+              <div class="p-4 rounded-lg shadow" style="background-color: ${
+                config.surface_color || defaultConfig.surface_color
+              }">
+                <p class="text-sm mb-1" style="color: ${
+                  config.secondary_action_color ||
+                  defaultConfig.secondary_action_color
+                }">Pending approval</p>
+                <p class="text-2xl font-bold" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">${pendingForApproval.length}</p>
+              </div>
+              <div class="p-4 rounded-lg shadow" style="background-color: ${
+                config.surface_color || defaultConfig.surface_color
+              }">
+                <p class="text-sm mb-1" style="color: ${
+                  config.secondary_action_color ||
+                  defaultConfig.secondary_action_color
+                }">Approved resellers</p>
+                <p class="text-2xl font-bold" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">${approvedUsers.length}</p>
+              </div>
+              <div class="p-4 rounded-lg shadow" style="background-color: ${
+                config.surface_color || defaultConfig.surface_color
+              }">
+                <p class="text-sm mb-1" style="color: ${
+                  config.secondary_action_color ||
+                  defaultConfig.secondary_action_color
+                }">Unverified emails</p>
+                <p class="text-2xl font-bold" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">${unverifiedUsers.length}</p>
+              </div>
+            </div>
+
+            <div class="mb-8 p-6 rounded-lg shadow" style="background-color: ${
+              config.surface_color || defaultConfig.surface_color
+            }">
+              <h2 class="text-2xl font-bold mb-4" style="color: ${
+                config.text_color || defaultConfig.text_color
+              }">Verified users waiting for approval (${
+          pendingForApproval.length
+        })</h2>
+              ${
+                pendingForApproval.length === 0
+                  ? `<p style="color: ${
+                      config.secondary_action_color ||
+                      defaultConfig.secondary_action_color
+                    }">No verified users pending admin approval.</p>`
+                  : `<div class="space-y-3">
+                  ${pendingForApproval
+                    .map(
+                      (user) => `
+                    <div class="flex justify-between items-center p-4 border rounded-lg" style="border-color: ${
+                      config.secondary_action_color ||
+                      defaultConfig.secondary_action_color
+                    }">
+                      <div>
+                        <p class="font-semibold" style="color: ${
+                          config.text_color || defaultConfig.text_color
+                        }">${user.username}</p>
+                        <p class="text-sm" style="color: ${
+                          config.secondary_action_color ||
+                          defaultConfig.secondary_action_color
+                        }">${user.email}</p>
+                      </div>
+                      <button class="approve-btn px-4 py-2 rounded-lg font-semibold text-white" data-user-id="${
+                        user.id
+                      }" style="background-color: ${
+                          config.primary_action_color ||
+                          defaultConfig.primary_action_color
+                        }">
+                        Approve
+                      </button>
+                    </div>
+                  `
+                    )
+                    .join("")}
+                </div>`
+              }
+            </div>
+            
+            <div class="mb-8 p-6 rounded-lg shadow" style="background-color: ${
+              config.surface_color || defaultConfig.surface_color
+            }">
+              <h2 class="text-2xl font-bold mb-4" style="color: ${
+                config.text_color || defaultConfig.text_color
+              }">Approved Resellers (${approvedUsers.length})</h2>
+              ${
+                approvedUsers.length === 0
+                  ? `<p style="color: ${
+                      config.secondary_action_color ||
+                      defaultConfig.secondary_action_color
+                    }">No approved users yet.</p>`
+                  : `<div class="space-y-2">
+                  ${approvedUsers
+                    .map(
+                      (user) => `
+                    <div class="flex justify-between items-center p-4 border rounded-lg" style="border-color: ${
+                      config.secondary_action_color ||
+                      defaultConfig.secondary_action_color
+                    }">
+                      <div>
+                        <p class="font-semibold" style="color: ${
+                          config.text_color || defaultConfig.text_color
+                        }">${user.username}</p>
+                        <p class="text-sm" style="color: ${
+                          config.secondary_action_color ||
+                          defaultConfig.secondary_action_color
+                        }">${user.email} • ${user.role}</p>
+                      </div>
+                    </div>
+                  `
+                    )
+                    .join("")}
+                </div>`
+              }
+            </div>
+
+            <div class="p-6 rounded-lg shadow" style="background-color: ${
+              config.surface_color || defaultConfig.surface_color
+            }">
+              <h2 class="text-2xl font-bold mb-4" style="color: ${
+                config.text_color || defaultConfig.text_color
+              }">Unverified Users (${unverifiedUsers.length})</h2>
+              <p class="text-sm mb-3" style="color: ${
+                config.secondary_action_color ||
+                defaultConfig.secondary_action_color
+              }">These users have registered but have not yet verified their Gmail address.</p>
+              ${
+                unverifiedUsers.length === 0
+                  ? `<p style="color: ${
+                      config.secondary_action_color ||
+                      defaultConfig.secondary_action_color
+                    }">No unverified users.</p>`
+                  : `<div class="space-y-2">
+                  ${unverifiedUsers
+                    .map(
+                      (user) => `
+                    <div class="flex justify-between items-center p-4 border rounded-lg" style="border-color: ${
+                      config.secondary_action_color ||
+                      defaultConfig.secondary_action_color
+                    }">
+                      <div>
+                        <p class="font-semibold" style="color: ${
+                          config.text_color || defaultConfig.text_color
+                        }">${user.username}</p>
+                        <p class="text-sm" style="color: ${
+                          config.secondary_action_color ||
+                          defaultConfig.secondary_action_color
+                        }">${user.email}</p>
+                      </div>
+                    </div>
+                  `
+                    )
+                    .join("")}
+                </div>`
+              }
+            </div>
+          </div>
+        </div>
+      `;
+      }
+
+      function renderUserDashboard(config) {
+        return `
+        <div class="w-full h-full flex items-center justify-center p-4" style="background-color: ${
+          config.background_color || defaultConfig.background_color
+        }">
+          <div class="w-full max-w-2xl p-8 rounded-lg shadow-lg" style="background-color: ${
+            config.surface_color || defaultConfig.surface_color
+          }">
+            <div class="flex justify-between items-center mb-6">
+              <h1 class="text-3xl font-bold" style="color: ${
+                config.text_color || defaultConfig.text_color
+              }">Welcome, ${currentUser.username}!</h1>
+              <button id="logoutBtn" class="px-4 py-2 rounded-lg font-semibold" style="background-color: ${
+                config.secondary_action_color ||
+                defaultConfig.secondary_action_color
+              }; color: white">
+                Logout
+              </button>
+            </div>
+            
+            <div class="space-y-4">
+              <div class="p-4 border rounded-lg" style="border-color: ${
+                config.secondary_action_color ||
+                defaultConfig.secondary_action_color
+              }">
+                <p class="font-semibold mb-1" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">Email</p>
+                <p style="color: ${
+                  config.secondary_action_color ||
+                  defaultConfig.secondary_action_color
+                }">${currentUser.email}</p>
+              </div>
+              
+              <div class="p-4 border rounded-lg" style="border-color: ${
+                config.secondary_action_color ||
+                defaultConfig.secondary_action_color
+              }">
+                <p class="font-semibold mb-1" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">Role</p>
+                <p style="color: ${
+                  config.secondary_action_color ||
+                  defaultConfig.secondary_action_color
+                }">${currentUser.role}</p>
+              </div>
+
+              <div class="p-4 border rounded-lg" style="border-color: ${
+                config.secondary_action_color ||
+                defaultConfig.secondary_action_color
+              }">
+                <p class="font-semibold mb-1" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">Email Verification</p>
+                <p style="color: ${
+                  currentUser.emailVerified ? "#16a34a" : "#f97316"
+                }">
+                  ${currentUser.emailVerified ? "Verified" : "Not Verified"}
+                </p>
+              </div>
+              
+              <div class="p-4 border rounded-lg" style="border-color: ${
+                config.secondary_action_color ||
+                defaultConfig.secondary_action_color
+              }">
+                <p class="font-semibold mb-1" style="color: ${
+                  config.text_color || defaultConfig.text_color
+                }">Admin Approval Status</p>
+                <p style="color: ${
+                  currentUser.status === "approved" ? "#16a34a" : "#f97316"
+                }">${
+          currentUser.status === "approved" ? "Approved" : "Pending Approval"
+        }</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      }
+
+      // ========== EVENTS & HANDLERS ==========
+
+      function attachEventListeners(config) {
+        const loginForm = document.getElementById("loginForm");
+        if (loginForm) {
+          loginForm.addEventListener("submit", handleLogin);
+        }
+
+        const registerForm = document.getElementById("registerForm");
+        if (registerForm) {
+          registerForm.addEventListener("submit", handleRegister);
+        }
+
+        const switchToRegister = document.getElementById("switchToRegister");
+        if (switchToRegister) {
+          switchToRegister.addEventListener("click", () => {
+            currentView = "register";
+            renderApp();
+          });
+        }
+
+        const switchToLogin = document.getElementById("switchToLogin");
+        if (switchToLogin) {
+          switchToLogin.addEventListener("click", () => {
+            currentView = "login";
+            renderApp();
+          });
+        }
+
+        const logoutBtn = document.getElementById("logoutBtn");
+        if (logoutBtn) {
+          logoutBtn.addEventListener("click", () => {
+            currentUser = null;
+            currentView = "landing";
+            renderApp();
+          });
+        }
+
+        const approveButtons = document.querySelectorAll(".approve-btn");
+        approveButtons.forEach((btn) => {
+          btn.addEventListener("click", () => handleApproval(btn.dataset.userId));
+        });
+
+        const landingGetStarted = document.getElementById("landingGetStarted");
+        if (landingGetStarted) {
+          landingGetStarted.addEventListener("click", () => {
+            currentView = "register";
+            renderApp();
+          });
+        }
+
+        const landingSignIn = document.getElementById("landingSignIn");
+        if (landingSignIn) {
+          landingSignIn.addEventListener("click", () => {
+            currentView = "login";
+            renderApp();
+          });
+        }
+
+        const landingSignUp = document.getElementById("landingSignUp");
+        if (landingSignUp) {
+          landingSignUp.addEventListener("click", () => {
+            currentView = "register";
+            renderApp();
+          });
+        }
+
+        const backToLandingFromLogin = document.getElementById(
+          "backToLandingFromLogin"
+        );
+        if (backToLandingFromLogin) {
+          backToLandingFromLogin.addEventListener("click", () => {
+            currentView = "landing";
+            renderApp();
+          });
+        }
+
+        const backToLandingFromRegister = document.getElementById(
+          "backToLandingFromRegister"
+        );
+        if (backToLandingFromRegister) {
+          backToLandingFromRegister.addEventListener("click", () => {
+            currentView = "landing";
+            renderApp();
+          });
+        }
+      }
+
+      async function handleLogin(e) {
+        e.preventDefault();
+
+        const username = document.getElementById("loginUsername").value.trim();
+        const password = document.getElementById("loginPassword").value.trim();
+        const errorDiv = document.getElementById("loginError");
+        const loginBtn = document.getElementById("loginBtn");
+
+        loginBtn.disabled = true;
+        loginBtn.textContent = "Signing in...";
+        errorDiv.classList.add("hidden");
+
+        const user = allUsers.find(
+          (u) => u.username === username && u.password === password
+        );
+
+        if (!user) {
+          errorDiv.textContent = "Invalid username or password";
+          errorDiv.classList.remove("hidden");
+          loginBtn.disabled = false;
+          loginBtn.textContent = "Sign In";
+          return;
+        }
+
+        // For resellers: enforce email verification and admin approval
+        if (user.role !== "admin") {
+          if (!user.emailVerified) {
+            errorDiv.textContent =
+              "Please verify your Gmail address from the email we sent before logging in.";
+            errorDiv.classList.remove("hidden");
+            loginBtn.disabled = false;
+            loginBtn.textContent = "Sign In";
+            return;
+          }
+
+          if (user.status !== "approved") {
+            errorDiv.textContent =
+              "Your account is verified but still pending admin approval.";
+            errorDiv.classList.remove("hidden");
+            loginBtn.disabled = false;
+            loginBtn.textContent = "Sign In";
+            return;
+          }
+        }
+
+        currentUser = user;
+        loginBtn.disabled = false;
+        loginBtn.textContent = "Sign In";
+        renderApp();
+      }
+
+      async function handleRegister(e) {
+        e.preventDefault();
+
+        if (allUsers.length >= 999) {
+          const errorDiv = document.getElementById("registerError");
+          errorDiv.textContent =
+            "Maximum user limit reached. Please contact administrator.";
+          errorDiv.classList.remove("hidden");
+          return;
+        }
+
+        const email = document.getElementById("registerEmail").value.trim();
+        const username = document
+          .getElementById("registerUsername")
+          .value.trim();
+        const password = document
+          .getElementById("registerPassword")
+          .value.trim();
+        const errorDiv = document.getElementById("registerError");
+        const successDiv = document.getElementById("registerSuccess");
+        const registerBtn = document.getElementById("registerBtn");
+
+        errorDiv.classList.add("hidden");
+        successDiv.classList.add("hidden");
+
+        // Gmail only
+        if (!email.toLowerCase().endsWith("@gmail.com")) {
+          errorDiv.textContent = "Only Gmail addresses are allowed.";
+          errorDiv.classList.remove("hidden");
+          return;
+        }
+
+        registerBtn.disabled = true;
+        registerBtn.textContent = "Registering...";
+
+        const existingUser = allUsers.find(
+          (u) => u.username === username || u.email === email
+        );
+        if (existingUser) {
+          errorDiv.textContent = "Username or email already exists";
+          errorDiv.classList.remove("hidden");
+          registerBtn.disabled = false;
+          registerBtn.textContent = "Register";
+          return;
+        }
+
+        const newUser = {
+          id: Date.now().toString(),
+          email: email,
+          username: username,
+          password: password,
+          role: "reseller",
+          status: "pending", // pending admin approval
+          emailVerified: false, // will become true after email verification
+          createdAt: new Date().toISOString(),
+        };
+
+        // HERE you would call your backend to send verification email
+        // e.g. await api.sendVerificationEmail(newUser);
+
+        const result = await window.dataSdk.create(newUser);
+
+        if (result.isOk) {
+          successDiv.textContent =
+            "Registration successful! We sent a verification link to your Gmail. Verify your email first, then wait for admin approval.";
+          successDiv.classList.remove("hidden");
+          document.getElementById("registerForm").reset();
+        } else {
+          errorDiv.textContent = "Registration failed. Please try again.";
+          errorDiv.classList.remove("hidden");
+        }
+
+        registerBtn.disabled = false;
+        registerBtn.textContent = "Register";
+      }
+
+      async function handleApproval(userId) {
+        const user = allUsers.find((u) => u.id === userId);
+        if (!user) return;
+
+        const updatedUser = { ...user, status: "approved" };
+        const result = await window.dataSdk.update(updatedUser);
+
+        if (!result.isOk) {
+          alert("Failed to approve user. Please try again.");
+        }
+      }
+
+      async function onConfigChange(config) {
+        renderApp();
+      }
+
+      if (window.elementSdk) {
+        window.elementSdk.init({
+          defaultConfig,
+          onConfigChange,
+          mapToCapabilities: (config) => ({
+            recolorables: [
+              {
+                get: () =>
+                  config.background_color || defaultConfig.background_color,
+                set: (value) => {
+                  config.background_color = value;
+                  window.elementSdk.setConfig({ background_color: value });
+                },
+              },
+              {
+                get: () =>
+                  config.surface_color || defaultConfig.surface_color,
+                set: (value) => {
+                  config.surface_color = value;
+                  window.elementSdk.setConfig({ surface_color: value });
+                },
+              },
+              {
+                get: () => config.text_color || defaultConfig.text_color,
+                set: (value) => {
+                  config.text_color = value;
+                  window.elementSdk.setConfig({ text_color: value });
+                },
+              },
+              {
+                get: () =>
+                  config.primary_action_color ||
+                  defaultConfig.primary_action_color,
+                set: (value) => {
+                  config.primary_action_color = value;
+                  window.elementSdk.setConfig({
+                    primary_action_color: value,
+                  });
+                },
+              },
+              {
+                get: () =>
+                  config.secondary_action_color ||
+                  defaultConfig.secondary_action_color,
+                set: (value) => {
+                  config.secondary_action_color = value;
+                  window.elementSdk.setConfig({
+                    secondary_action_color: value,
+                  });
+                },
+              },
+            ],
+            borderables: [],
+            fontEditable: undefined,
+            fontSizeable: undefined,
+          }),
+          mapToEditPanelValues: (config) =>
+            new Map([
+              ["site_title", config.site_title || defaultConfig.site_title],
+              [
+                "login_heading",
+                config.login_heading || defaultConfig.login_heading,
+              ],
+              [
+                "register_heading",
+                config.register_heading || defaultConfig.register_heading,
+              ],
+            ]),
+        });
+      }
+
+      initApp();
+    </script>
+  </body>
+</html>
